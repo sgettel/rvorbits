@@ -16,15 +16,12 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     
     sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
     jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
-   
+    if jdb[0] > 2.45e6 then jdb -= 2.45e6 #truncate
 
-    npts = jdb.size
     tstart = jdb[0]
-
-    
-
+  
     #read Mstar
-    Mstar = 1.0
+    mstar = 1.0
     #Mstar = 1.69
 
     #process offsets - very not implemented 
@@ -35,6 +32,9 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
     guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157, -1.49, 0.0])#HD209458
+    #guesspars = np.arrays([]) #K00273
+    if guesspars[1] > 2.45e6 then guesspars[1] -= 2.45e6 #truncate
+
     #p = orbel[0+i*7]
     #tp = orbel[1+i*7]
     #ecc = orbel[2+i*7]
@@ -64,10 +64,35 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
 
     #call mass estimate
 
-    return m, bootpar #jdb, rv, nsrv
+    return m, bootpar,sigpar #jdb, rv, nsrv
 
-#def mass_estimate
+def mass_estimate(m,bootpar,mstar,norbits=1):
+   
+    #some constants, maybe use astropy here
+    msun = 1.9891e30
+    mearth = 5.97219e24
+    G = 6.673e-11 #m^3 kg^-1 s^-2
+    etoj = 317.83
+    
+    ip = range(norbits)
+    
+    pers = m.params[ip*7]
+    eccs = m.params[ip*7+2]
+    amps = m.params[ip*7+4]
+    
+    mparr_all = np.zeros(orbits,bootpar.shape[0])
 
+    #mass estimate
+    fm = (1 - eccs*eccs)**(1.5)*amps**3*(pers*86400.0)/(2*np.pi*G) #kg
+    mpsini = ((mstar*msun)**2*fm)**(1./3.)/mearth
+
+    #errors on mass estimate
+    for i in ip:
+        fmarr = (1 - bootpar[*,i*7+2]**2)**(1.5)*bootpar[*,i*7+4]**3*(bootpar[*,i*7]*86400.0)/(2.0*np.pi*G)
+        mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
+        mparr_all[i,:]
+
+    return mparr_all
 
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
@@ -84,8 +109,10 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
     m.set_func(rv_drive,param_names, args=[jdb])
 
     #make some reasonable limits
-    m.lm_prob.p_limit(0, lower=0.1, upper=(np.max(jdb)-np.min(jdb))) #per no longer than range of survey
-    m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/2., upper=orbel[1]+orbel[0]/2.) #T0 within one period guess
+    #m.lm_prob.p_limit(0, lower=0.1, upper=(np.max(jdb)-np.min(jdb))) #per no longer than range of survey
+    #m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/4., upper=orbel[1]+orbel[0]/4.) #T0 within one period guess
+    m.lm_prob.p_value(0, orbel[0], fixed=True)
+    m.lm_prob.p_value(1, orbel[1], fixed=True)
     m.lm_prob.p_limit(2, lower=0.0, upper=0.99) #ecc must be physical
     m.lm_prob.p_limit(3, lower=0.0, upper=360.0)
     m.lm_prob.p_limit(4, lower=0.0, upper=1.0e5) #K must be physical  
@@ -93,7 +120,6 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
 
     m.solve(orbel)
     #m.print_soln()
-  
     return m
 
 def rv_drive(orbel, t):
@@ -104,7 +130,7 @@ def rv_drive(orbel, t):
 
     phase = np.zeros((rv.size,nplanets))
     #print orbel
-    for i in range(nplanets):
+    for i in range(nplanets):  #get rid of the for loops...
         p = orbel[0+i*7]
         tp = orbel[1+i*7]
         ecc = orbel[2+i*7]
@@ -231,14 +257,14 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     print rv.size, bestfit.size, jdb.size, bestpar.size
     resid = rv - bestfit
 
-    nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
+    #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
     print 'nboot = ',nboot
 
     bootpar = np.zeros((nboot,bestpar.size))
     
-    for i in range(nboot):
+    for i in range(nboot): #get rid of the for loop...
         if i%100 == 0:
-            print i/nboot*100,'%'
+            print (i+0.0)/nboot*100,'%'
          
         scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
         tmprv = resid[scramble] + bestfit            #scramble residuals
@@ -248,6 +274,6 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
         bootpar[i,:] = mi.params
 
     
-    sigpar = np.stddev(bootpar,axis=0)
+    sigpar = np.std(bootpar,axis=0)
 
     return bootpar, sigpar
