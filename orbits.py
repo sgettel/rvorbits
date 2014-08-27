@@ -3,11 +3,12 @@
 #from __future__ import print_function #interface Python 2/3, need this?
 import numpy as np
 import read_rdb_harpsn as rr
+
 from pwkit import lsqmdl
 from utils import * #just fan for now
 
 #Given a target name, does everything!
-def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000):
+def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6):
     
     #read RV data 
     #jdb, rv, srv, labels = rr.process_all(targname)
@@ -16,7 +17,8 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     
     sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
     jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
-    if jdb[0] > 2.45e6 then jdb -= 2.45e6 #truncate
+    if jdb[0] > epoch:
+        jdb -= epoch #truncate
 
     tstart = jdb[0]
   
@@ -33,7 +35,8 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
         
     guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157, -1.49, 0.0])#HD209458
     #guesspars = np.arrays([]) #K00273
-    if guesspars[1] > 2.45e6 then guesspars[1] -= 2.45e6 #truncate
+    if guesspars[1] > epoch:
+        guesspars[1] -= epoch #truncate
 
     #p = orbel[0+i*7]
     #tp = orbel[1+i*7]
@@ -50,23 +53,53 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     
     #calculate mpsini
 
-    #display some output - customize
-    m.print_soln()
+    #display initial fit - want to show fixed params too
+    m.print_soln()  #read this in detail
     
-    
+    #mass estimate
+    mpsini = mass_estimate(m ,mstar,norbits=norbits)
+    print 'mp*sin(i):         ',mpsini
+
     #make plots
-    tmod = np.linspace(np.min(jdb),np.max(jdb),1000)
+    make_plots(targname,jdb,rv,srv,guesspars,m,nmod=1000)
+
+    #call bootstrapping
+    bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
+    mpsini, mparr_all = mass_estimate(m,bootpar,mstar,norbits=norbits)
+
+    #print_output
+    print_errs(meanpar,sigpar,norbits=norbits)
+
+    return m, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+
+def make_plots(targname,jdb,rv,srv,guesspars,m,nmod=1000):
+
+    tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
     model_init = rv_drive(guesspars,tmod)
     model_final = rv_drive(m.params,tmod)
-     
-    #scramble residuals & call bootstrapping
-    bootpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
 
-    #call mass estimate
+    plt.figure(1)
+    plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
+    plt.plot(tmod,model_final,'r-')
+    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
+    plt.close(1)
 
-    return m, bootpar,sigpar #jdb, rv, nsrv
 
-def mass_estimate(m,bootpar,mstar,norbits=1):
+def print_errs(meanpar,sigpar,norbits=1):
+    
+    for i in range(norbits):
+        print '*****Planet ',string(i+1),' errors:*****'
+        print 'Per: ', str(meanpar[i*7]),'+/-',str(sigpar[i*7])
+        print 'Tp: ', str(meanpar[i*7+1]),'+/-',str(sigpar[i*7+1])
+        print 'ec: ', str(meanpar[i*7+2]),'+/-',str(sigpar[i*7+2])
+        print 'om: ', str(meanpar[i*7+3]),'+/-',str(sigpar[i*7+3])
+        print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
+        print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
+        print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
+
+    return
+
+def mass_estimate(m,mstar,norbits=1,bootpar=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -74,26 +107,31 @@ def mass_estimate(m,bootpar,mstar,norbits=1):
     G = 6.673e-11 #m^3 kg^-1 s^-2
     etoj = 317.83
     
-    ip = range(norbits)
+    ip = np.array(range(norbits))
     
     pers = m.params[ip*7]
     eccs = m.params[ip*7+2]
     amps = m.params[ip*7+4]
     
-    mparr_all = np.zeros(orbits,bootpar.shape[0])
-
     #mass estimate
     fm = (1 - eccs*eccs)**(1.5)*amps**3*(pers*86400.0)/(2*np.pi*G) #kg
     mpsini = ((mstar*msun)**2*fm)**(1./3.)/mearth
 
-    #errors on mass estimate
-    for i in ip:
-        fmarr = (1 - bootpar[*,i*7+2]**2)**(1.5)*bootpar[*,i*7+4]**3*(bootpar[*,i*7]*86400.0)/(2.0*np.pi*G)
-        mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
-        mparr_all[i,:]
+    #calculate error on mass if bootpar array is input
+    if len(np.array(bootpar).shape) > 0:
+        bootpar = np.array([bootpar])
+        mparr_all = np.zeros((norbits,bootpar.shape[0]))
 
-    return mparr_all
+        for i in ip:
+            fmarr = (1 - bootpar[:,i*7+2]**2)**(1.5)*bootpar[:,i*7+4]**3*(bootpar[:,i*7]*86400.0)/(2.0*np.pi*G)
+            mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
+            mparr_all[i,:] = mparr
 
+        return mpsini, mparr_all
+
+    else:
+        return mpsini
+    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
 
@@ -105,7 +143,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
     if param_names == 0: #do something more clever here later
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt'] 
 
-    m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class...
+    m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
     m.set_func(rv_drive,param_names, args=[jdb])
 
     #make some reasonable limits
@@ -254,7 +292,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     #Wow, this is slow! Make faster
 
     bestfit = rv_drive(bestpar, jdb)
-    print rv.size, bestfit.size, jdb.size, bestpar.size
+    
     resid = rv - bestfit
 
     #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
@@ -273,7 +311,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
         mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter)
         bootpar[i,:] = mi.params
 
-    
+    meanpar = np.mean(bootpar,axis=0)
     sigpar = np.std(bootpar,axis=0)
 
-    return bootpar, sigpar
+    return bootpar, meanpar, sigpar
