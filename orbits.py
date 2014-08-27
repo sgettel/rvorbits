@@ -7,7 +7,7 @@ from pwkit import lsqmdl
 from utils import * #just fan for now
 
 #Given a target name, does everything!
-def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=0):
+def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000):
     
     #read RV data 
     #jdb, rv, srv, labels = rr.process_all(targname)
@@ -59,10 +59,15 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     model_init = rv_drive(guesspars,tmod)
     model_final = rv_drive(m.params,tmod)
      
-#scramble residuals & call bootstrapping
+    #scramble residuals & call bootstrapping
+    bootpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
 
+    #call mass estimate
 
-    return m #jdb, rv, nsrv
+    return m, bootpar #jdb, rv, nsrv
+
+#def mass_estimate
+
 
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
@@ -218,22 +223,31 @@ def kepler(inM,inecc):
 
     return Earr
 
-def bootstrap_rvs(bestpar, jdb, rv, nsrv,nboot=1000):
-    #approximate port of bootpar.pro by SXW
+def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
+    #based on the general method of bootpar.pro by SXW
+    #Wow, this is slow! Make faster
 
-    bestfit = rv_drive(jdb, bestpar)
+    bestfit = rv_drive(bestpar, jdb)
+    print rv.size, bestfit.size, jdb.size, bestpar.size
     resid = rv - bestfit
 
-    nboot = np.max(nboot,resid.size*np.log10(resid.size)**2) #why this limit?
+    nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
     print 'nboot = ',nboot
 
     bootpar = np.zeros((nboot,bestpar.size))
     
     for i in range(nboot):
         if i%100 == 0:
-            print (i+1.0)/nboot
-        scramble = np.random.rand(jdb.size)*jdb.size #random indices with replacement
+            print i/nboot*100,'%'
+         
+        scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
         tmprv = resid[scramble] + bestfit            #scramble residuals
-        tmperr = nsrv[scramble]                      #error goes with individual residual
+        tmperr = srv[scramble]                      #error goes with individual residual
 
-        
+        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter)
+        bootpar[i,:] = mi.params
+
+    
+    sigpar = np.stddev(bootpar,axis=0)
+
+    return bootpar, sigpar
