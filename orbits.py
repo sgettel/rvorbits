@@ -3,7 +3,7 @@
 #from __future__ import print_function #interface Python 2/3, need this?
 import numpy as np
 import read_rdb_harpsn as rr
-
+import matplotlib.pyplot as plt
 from pwkit import lsqmdl
 from utils import * #just fan for now
 
@@ -34,7 +34,7 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
     guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157, -1.49, 0.0])#HD209458
-    #guesspars = np.arrays([]) #K00273
+    #guesspars = np.arrays([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
 
@@ -57,7 +57,8 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     m.print_soln()  #read this in detail
     
     #mass estimate
-    mpsini = mass_estimate(m ,mstar,norbits=norbits)
+    print norbits
+    mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',mpsini
 
     #make plots
@@ -65,7 +66,8 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
 
     #call bootstrapping
     bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
-    mpsini, mparr_all = mass_estimate(m,bootpar,mstar,norbits=norbits)
+    bootpar.shape
+    mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
 
     #print_output
     print_errs(meanpar,sigpar,norbits=norbits)
@@ -120,7 +122,8 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
     #calculate error on mass if bootpar array is input
     if len(np.array(bootpar).shape) > 0:
         bootpar = np.array([bootpar])
-        mparr_all = np.zeros((norbits,bootpar.shape[0]))
+        print bootpar.shape, m.params.shape
+        mparr_all = np.zeros((norbits,bootpar.shape[2]))
 
         for i in ip:
             fmarr = (1 - bootpar[:,i*7+2]**2)**(1.5)*bootpar[:,i*7+4]**3*(bootpar[:,i*7]*86400.0)/(2.0*np.pi*G)
