@@ -7,8 +7,11 @@ import matplotlib.pyplot as plt
 from pwkit import lsqmdl
 from utils import * #just fan for now
 
-#Given a target name, does everything!
-def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6,circ=0):
+
+
+
+#Given a target name, do everything!
+def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6,circ=0):
     
     #read RV data 
     jdb, rv, srv, labels = rr.process_all(targname,maxsrv=5,maxrv=-50000)
@@ -31,9 +34,14 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #process offsets - very not implemented 
 
     #read/process parameter guesses from somewhere
-    #format [(T0, per, K1, ecc, omega, omegadot)*nplanets,voffset]
-    #guess = np.array([53460.9375,2093.060,18.242,0.40179,206.896,0.000,-1.704])
-    #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
+    #p = orbel[0+i*7]
+    #tp = orbel[1+i*7]
+    #ecc = orbel[2+i*7]
+    #om = orbel[3+i*7] *np.pi/180. #degrees to radians
+    #k = orbel[4+i*7]
+    #gamma = orbel[5+i*7]
+    #dvdt = orbel[6+i*7]
+    #curv = 0 
         
     #guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
     guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.01]) #K00273
@@ -51,27 +59,14 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     else:
         curv = 0
 
-    #p = orbel[0+i*7]
-    #tp = orbel[1+i*7]
-    #ecc = orbel[2+i*7]
-    #om = orbel[3+i*7] *np.pi/180. #degrees to radians
-    #k = orbel[4+i*7]
-    #gamma = orbel[5+i*7]
-    #dvdt = orbel[6+i*7]
-    #curv = 0 
-
-
     m = rvfit_lsqmdl(guesspars, jdb, rv, srv, jitter=jitter,trend=trend,circ=circ)
     m0 = np.copy(m)
 
-    #calculate mpsini
-
+    
     #display initial fit - want to show fixed params too
     m.print_soln()  #read this in detail
-    #print m.params.size,m.params.shape
-
-    #mass estimate
     
+    #mass estimate
     mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',str(mpsini)
     
@@ -82,13 +77,13 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     if nboot > 0:
         bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv)
    
-        #print bootpar.shape,' bootpar.shape'
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
-        #print mparr_all.shape,' mparr_all.shape'
-    
+       
         print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
     return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+
+
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
@@ -120,6 +115,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     
 #def plot_pars(targname,bootpars,mparr_all,norbits=1):
 #    print targname
+#    plot histograms!
 
 def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
     
@@ -366,3 +362,6 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
     
     return bootpar, meanpar, sigpar
 
+#to run as ...orbits.py
+if __name__ == '__main__':
+    orbits_test(nboot=10)
