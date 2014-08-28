@@ -265,6 +265,7 @@ def rv_drive(orbel, t):
 #def rv_drive_noloop():
 
 #Iteratively solve for E (anomoly) given M (mean anomoly) and e (eccentricity)
+#@profile
 def kepler(inM,inecc):
     #Port of kepler.pro by JTW, from Murray & Dermott p. 35, from Danby (1988)
     #SJG Aug 2014
