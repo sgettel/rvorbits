@@ -36,7 +36,7 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
     #guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
-    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.001]) #K00273
+    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.01]) #K00273
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
 
@@ -45,7 +45,8 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     else:
         trend = 0
 
-    if guesspars[7] > 0:
+    if not guesspars[7] == 0:
+        print 'parabolic term allowed'
         curv = 1
     else:
         curv = 0
@@ -84,7 +85,7 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
         #print bootpar.shape,' bootpar.shape'
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
         #print mparr_all.shape,' mparr_all.shape'
-    #print_output
+    
         print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
     return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
@@ -113,7 +114,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod))
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
     
@@ -132,8 +133,8 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
         print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
-        print 'mp*sin(i): ',str(mpsini[i]),'+/-',str(np.std(mparr_all[i,:]))
-
+        print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
+        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini*100),'%'
     return
 
 def mass_estimate(m,mstar,norbits=1,bootpar=-1):
@@ -362,7 +363,6 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
 
     meanpar = np.mean(bootpar,axis=0)
     sigpar = np.std(bootpar,axis=0)
-    print meanpar
-    print sigpar
+    
     return bootpar, meanpar, sigpar
 
