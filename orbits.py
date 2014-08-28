@@ -36,7 +36,7 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
     #guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
-    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
+    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.001]) #K00273
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
 
@@ -44,6 +44,11 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
         trend = 1
     else:
         trend = 0
+
+    if guesspars[7] > 0:
+        curv = 1
+    else:
+        curv = 0
 
     #p = orbel[0+i*7]
     #tp = orbel[1+i*7]
@@ -56,8 +61,8 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
 
 
     m = rvfit_lsqmdl(guesspars, jdb, rv, srv, jitter=jitter,trend=trend,circ=circ)
-    
-    
+    m0 = np.copy(m)
+
     #calculate mpsini
 
     #display initial fit - want to show fixed params too
@@ -65,23 +70,24 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #print m.params.size,m.params.shape
 
     #mass estimate
+    
     mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
     plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=200)
-
+    
     #call bootstrapping
     if nboot > 0:
-        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
+        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv)
    
-        print bootpar.shape,' bootpar.shape'
+        #print bootpar.shape,' bootpar.shape'
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
-        print mparr_all.shape,' mparr_all.shape'
+        #print mparr_all.shape,' mparr_all.shape'
     #print_output
         print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
-    return m, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+    return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
@@ -96,9 +102,9 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     plt.close(1)
 
     #phase at first period - only taking 1 period right now...
-    pars = m.params
+    pars = np.copy(m.params)
     pars[6] = 0 #remove trend
-    pars3 = m.params
+    pars3 = np.copy(m.params)
     pars3[4] = 0.0 #still not sure why this is used
     pars3[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
@@ -110,7 +116,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod))
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
-
+    
 #def plot_pars(targname,bootpars,mparr_all,norbits=1):
 #    print targname
 
@@ -125,6 +131,7 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
         print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
+        print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
         print 'mp*sin(i): ',str(mpsini[i]),'+/-',str(np.std(mparr_all[i,:]))
 
     return
@@ -164,7 +171,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
         return mpsini
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0):
 
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -172,7 +179,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0):
         nsrv = srv
 
     if param_names == 0: #do something more clever here later
-        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt'] 
+        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt', 'curv'] 
 
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
     m.set_func(rv_drive,param_names, args=[jdb])
@@ -183,13 +190,16 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0):
     m.lm_prob.p_value(0, orbel[0], fixed=True)
     #m.lm_prob.p_value(1, orbel[1], fixed=True)
     if circ > 0:
-        m.lm_prob.p_limit(2, 0.0, fixed=True)
+        m.lm_prob.p_value(2, 0.0, fixed=True)
     else:
         m.lm_prob.p_limit(2, lower=0.0, upper=0.99) #ecc must be physical
+    #m.lm_prob.p_value(3, 90.0, fixed=True)    
     m.lm_prob.p_limit(3, lower=0.0, upper=360.0)
     m.lm_prob.p_limit(4, lower=0.0, upper=1.0e5) #K must be physical  
     if not trend == 1:
         m.lm_prob.p_value(6, 0.0, fixed=True) #fix dvdt
+    if not curv == 1:
+        m.lm_prob.p_value(7, 0.0, fixed=True) #fix parabolic term
 
     m.solve(orbel)
     #m.print_soln()
@@ -326,7 +336,7 @@ def kepler(inM,inecc):
 
     return Earr
 
-def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
+def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=0):
     #based on the general method of bootpar.pro by SXW
     #Wow, this is slow! Make faster
 
@@ -340,18 +350,19 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     bootpar = np.zeros((nboot,bestpar.size))
     
     for i in range(nboot): #get rid of the for loop...
-        #if i%10 == 0:
-         #   print (i+0.0)/nboot*100,'%'
-        print i 
+        if i%50 == 0:
+            print (i+0.0)/nboot*100,'%'
+        #print i 
         scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
         tmprv = resid[scramble] + bestfit            #scramble residuals
         tmperr = srv[scramble]                      #error goes with individual residual
 
-        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter)
+        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,curv=curv,trend=trend)
         bootpar[i,:] = mi.params
 
     meanpar = np.mean(bootpar,axis=0)
     sigpar = np.std(bootpar,axis=0)
-
+    print meanpar
+    print sigpar
     return bootpar, meanpar, sigpar
 
