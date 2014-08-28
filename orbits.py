@@ -8,17 +8,19 @@ from pwkit import lsqmdl
 from utils import * #just fan for now
 
 #Given a target name, does everything!
-def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6):
+def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6,circ=0):
     
     #read RV data 
-    #jdb, rv, srv, labels = rr.process_all(targname)
- 
+    jdb, rv, srv, labels = rr.process_all(targname,maxsrv=5,maxrv=-50000)
+    print np.min(rv),np.max(rv)
     #demo!
-    
-    sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
-    jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
+    #sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
+    #jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
+
+    #adjust values to be sensible
     if jdb[0] > epoch:
         jdb -= epoch #truncate
+    rv -= np.median(rv)
 
     tstart = jdb[0]
   
@@ -33,10 +35,15 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #guess = np.array([53460.9375,2093.060,18.242,0.40179,206.896,0.000,-1.704])
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
-    guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
-    #guesspars = np.arrays([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
+    #guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
+    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
+
+    if guesspars[6] > 0:
+        trend = 1
+    else:
+        trend = 0
 
     #p = orbel[0+i*7]
     #tp = orbel[1+i*7]
@@ -48,7 +55,7 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     #curv = 0 
 
 
-    m = rvfit_lsqmdl(guesspars, jdb, rv, srv, jitter=jitter)
+    m = rvfit_lsqmdl(guesspars, jdb, rv, srv, jitter=jitter,trend=trend,circ=circ)
     
     
     #calculate mpsini
@@ -62,22 +69,24 @@ def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000)
+    plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=200)
 
     #call bootstrapping
-    bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
-    print bootpar.shape,' bootpar.shape'
-    mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
-
+    if nboot > 0:
+        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
+   
+        print bootpar.shape,' bootpar.shape'
+        mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
+        print mparr_all.shape,' mparr_all.shape'
     #print_output
-    print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
+        print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
     return m, bootpar,sigpar, mparr_all #jdb, rv, nsrv
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
-    model_init = rv_drive(guesspars,tmod)
+    #model_init = rv_drive(guesspars,tmod)
     model_final = rv_drive(m.params,tmod)
 
     plt.figure(1)
@@ -97,13 +106,13 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     #print rvt[0:10]
 
     plt.figure(2)
-    plt.errorbar(phase, rvt, yerr=srv,fmt='bo')
+    plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod))
-    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_pars_autoplot.png')
+    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
 
-def plot_pars(targname,bootpars,mparr_all,norbits=1):
-    print targname
+#def plot_pars(targname,bootpars,mparr_all,norbits=1):
+#    print targname
 
 def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
     
@@ -116,7 +125,7 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
         print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
-        print 'mp*sin(i): ',str(mpsini[i]),'+/-',str(np.std(mparr_all,axis=0))
+        print 'mp*sin(i): ',str(mpsini[i]),'+/-',str(np.std(mparr_all[i,:]))
 
     return
 
@@ -141,7 +150,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
     #calculate error on mass if bootpar array is input
     if len(np.array(bootpar).shape) > 0:
 
-        print bootpar.shape, m.params.shape
+        #print bootpar.shape, m.params.shape
         mparr_all = np.zeros((norbits,bootpar.shape[0]))
 
         for i in ip:
@@ -155,7 +164,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
         return mpsini
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0):
 
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -170,13 +179,17 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
 
     #make some reasonable limits
     #m.lm_prob.p_limit(0, lower=0.1, upper=(np.max(jdb)-np.min(jdb))) #per no longer than range of survey
-    #m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/4., upper=orbel[1]+orbel[0]/4.) #T0 within one period guess
+    m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/4., upper=orbel[1]+orbel[0]/4.) #T0 within one period guess
     m.lm_prob.p_value(0, orbel[0], fixed=True)
-    m.lm_prob.p_value(1, orbel[1], fixed=True)
-    m.lm_prob.p_limit(2, lower=0.0, upper=0.99) #ecc must be physical
+    #m.lm_prob.p_value(1, orbel[1], fixed=True)
+    if circ > 0:
+        m.lm_prob.p_limit(2, 0.0, fixed=True)
+    else:
+        m.lm_prob.p_limit(2, lower=0.0, upper=0.99) #ecc must be physical
     m.lm_prob.p_limit(3, lower=0.0, upper=360.0)
     m.lm_prob.p_limit(4, lower=0.0, upper=1.0e5) #K must be physical  
-    m.lm_prob.p_value(6, 0.0, fixed=True) #fix dvdt
+    if not trend == 1:
+        m.lm_prob.p_value(6, 0.0, fixed=True) #fix dvdt
 
     m.solve(orbel)
     #m.print_soln()
@@ -221,7 +234,7 @@ def rv_drive(orbel, t):
         #calculate the approximate eccentric anomaly, E1, from the mean anomaly, M
         M = 2.0*np.pi*( ((t-tp)/p) - np.floor((t-tp)/p) ) #phase in radians
         
-        E1 = kepler(M,ecc) #returns a matrix, why?
+        E1 = kepler(M,ecc) #returns a matrix, because fan
         E1 = E1[0,:]
         #calculate true anomaly
         n1 = 1.0 + ecc
@@ -327,9 +340,9 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     bootpar = np.zeros((nboot,bestpar.size))
     
     for i in range(nboot): #get rid of the for loop...
-        if i%10 == 0:
-            print (i+0.0)/nboot*100,'%'
-         
+        #if i%10 == 0:
+         #   print (i+0.0)/nboot*100,'%'
+        print i 
         scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
         tmprv = resid[scramble] + bestfit            #scramble residuals
         tmperr = srv[scramble]                      #error goes with individual residual
@@ -342,36 +355,3 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
 
     return bootpar, meanpar, sigpar
 
-def bootstrap_rvs_noloop(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
-    #based on the general method of bootpar.pro by SXW
-    #Wow, this is slow! Make faster
-
-    bestfit = rv_drive(bestpar, jdb)
-    print bestpar.size, bestpar.shape
-    resid0 = rv - bestfit
-    resid = fan(resid0,nboot) #shape(nboot,resid0)
-    
-
-    #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
-    print 'nboot = ',nboot
-
-    bootpar = np.zeros((nboot,bestpar.size))
-    scramble = np.random.randint(jdb.size,size=[nboot,jdb.size])
-    tmprv = resid[scramble] + fan(bestfit,nboot)
-    tmperr = fan(srv,nboot)[scramble]
-
-    for i in range(nboot): #get rid of the for loop...
-        if i%10 == 0:
-            print (i+0.0)/nboot*100,'%'
-         
-        #scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
-        #tmprv = resid[scramble] + bestfit            #scramble residuals
-        #tmperr = srv[scramble]                      #error goes with individual residual
-
-        #mi = rvfit_lsqmdl(bestpar, jdb, tmprv[], tmperr[], jitter=jitter)
-        bootpar[i,:] = mi.params
-
-    meanpar = np.mean(bootpar,axis=0)
-    sigpar = np.std(bootpar,axis=0)
-
-    return bootpar, meanpar, sigpar
