@@ -8,7 +8,7 @@ from pwkit import lsqmdl
 from utils import * #just fan for now
 
 #Given a target name, does everything!
-def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6):
+def orbits_test(targname,norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6):
     
     #read RV data 
     #jdb, rv, srv, labels = rr.process_all(targname)
@@ -33,7 +33,7 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
     #guess = np.array([53460.9375,2093.060,18.242,0.40179,206.896,0.000,-1.704])
     #guess = np.array([54292.4256,746.139,91.406,0.37450,108.235,0.0,83.342])
         
-    guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157, -1.49, 0.0])#HD209458
+    guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
     #guesspars = np.arrays([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
@@ -55,26 +55,26 @@ def orbits_test(targname='HD209458',norbits=1,nterms=0,jitter=0.0,modelstart=0,m
 
     #display initial fit - want to show fixed params too
     m.print_soln()  #read this in detail
-    
-    #mass estimate
-    print norbits
-    mpsini = mass_estimate(m, mstar, norbits=norbits)
-    print 'mp*sin(i):         ',mpsini
+    #print m.params.size,m.params.shape
 
+    #mass estimate
+    mpsini = mass_estimate(m, mstar, norbits=norbits)
+    print 'mp*sin(i):         ',str(mpsini)
+    
     #make plots
-    make_plots(targname,jdb,rv,srv,guesspars,m,nmod=1000)
+    plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000)
 
     #call bootstrapping
     bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter)
-    bootpar.shape
+    print bootpar.shape,' bootpar.shape'
     mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
 
     #print_output
-    print_errs(meanpar,sigpar,norbits=norbits)
+    print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
     return m, bootpar,sigpar, mparr_all #jdb, rv, nsrv
 
-def make_plots(targname,jdb,rv,srv,guesspars,m,nmod=1000):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
     model_init = rv_drive(guesspars,tmod)
@@ -86,11 +86,29 @@ def make_plots(targname,jdb,rv,srv,guesspars,m,nmod=1000):
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
+    #phase at first period - only taking 1 period right now...
+    pars = m.params
+    pars[6] = 0 #remove trend
+    pars3 = m.params
+    pars3[4] = 0.0 #still not sure why this is used
+    pars3[5] = 0.0
+    phase = (jdb - pars[1])/pars[0] % 1.0
+    rvt = rv_drive(pars3,jdb)
+    #print rvt[0:10]
 
-def print_errs(meanpar,sigpar,norbits=1):
+    plt.figure(2)
+    plt.errorbar(phase, rvt, yerr=srv,fmt='bo')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod))
+    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_pars_autoplot.png')
+    plt.close(2)
+
+def plot_pars(targname,bootpars,mparr_all,norbits=1):
+    print targname
+
+def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
     
     for i in range(norbits):
-        print '*****Planet ',string(i+1),' errors:*****'
+        print '*****Planet ',str(i+1),' errors:*****'
         print 'Per: ', str(meanpar[i*7]),'+/-',str(sigpar[i*7])
         print 'Tp: ', str(meanpar[i*7+1]),'+/-',str(sigpar[i*7+1])
         print 'ec: ', str(meanpar[i*7+2]),'+/-',str(sigpar[i*7+2])
@@ -98,6 +116,7 @@ def print_errs(meanpar,sigpar,norbits=1):
         print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
+        print 'mp*sin(i): ',str(mpsini[i]),'+/-',str(np.std(mparr_all,axis=0))
 
     return
 
@@ -121,9 +140,9 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
 
     #calculate error on mass if bootpar array is input
     if len(np.array(bootpar).shape) > 0:
-        bootpar = np.array([bootpar])
+
         print bootpar.shape, m.params.shape
-        mparr_all = np.zeros((norbits,bootpar.shape[2]))
+        mparr_all = np.zeros((norbits,bootpar.shape[0]))
 
         for i in ip:
             fmarr = (1 - bootpar[:,i*7+2]**2)**(1.5)*bootpar[:,i*7+4]**3*(bootpar[:,i*7]*86400.0)/(2.0*np.pi*G)
@@ -165,6 +184,9 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0):
 
 def rv_drive(orbel, t):
     #From rv_drive.pro in RVLIN by JTW
+
+    if orbel.size > 20:
+        print 'Warning: large number of params - are you sure you put the args in the right order?'
 
     rv = np.zeros_like(t)
     nplanets = orbel.size/7 
@@ -220,6 +242,7 @@ def rv_drive(orbel, t):
 
     return rv
 
+#def rv_drive_noloop():
 
 #Iteratively solve for E (anomoly) given M (mean anomoly) and e (eccentricity)
 def kepler(inM,inecc):
@@ -295,7 +318,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     #Wow, this is slow! Make faster
 
     bestfit = rv_drive(bestpar, jdb)
-    
+    #print bestpar.size, bestpar.shape
     resid = rv - bestfit
 
     #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
@@ -304,7 +327,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
     bootpar = np.zeros((nboot,bestpar.size))
     
     for i in range(nboot): #get rid of the for loop...
-        if i%100 == 0:
+        if i%10 == 0:
             print (i+0.0)/nboot*100,'%'
          
         scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
@@ -312,6 +335,40 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
         tmperr = srv[scramble]                      #error goes with individual residual
 
         mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter)
+        bootpar[i,:] = mi.params
+
+    meanpar = np.mean(bootpar,axis=0)
+    sigpar = np.std(bootpar,axis=0)
+
+    return bootpar, meanpar, sigpar
+
+def bootstrap_rvs_noloop(bestpar, jdb, rv, srv,nboot=1000,jitter=0):
+    #based on the general method of bootpar.pro by SXW
+    #Wow, this is slow! Make faster
+
+    bestfit = rv_drive(bestpar, jdb)
+    print bestpar.size, bestpar.shape
+    resid0 = rv - bestfit
+    resid = fan(resid0,nboot) #shape(nboot,resid0)
+    
+
+    #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
+    print 'nboot = ',nboot
+
+    bootpar = np.zeros((nboot,bestpar.size))
+    scramble = np.random.randint(jdb.size,size=[nboot,jdb.size])
+    tmprv = resid[scramble] + fan(bestfit,nboot)
+    tmperr = fan(srv,nboot)[scramble]
+
+    for i in range(nboot): #get rid of the for loop...
+        if i%10 == 0:
+            print (i+0.0)/nboot*100,'%'
+         
+        #scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
+        #tmprv = resid[scramble] + bestfit            #scramble residuals
+        #tmperr = srv[scramble]                      #error goes with individual residual
+
+        #mi = rvfit_lsqmdl(bestpar, jdb, tmprv[], tmperr[], jitter=jitter)
         bootpar[i,:] = mi.params
 
     meanpar = np.mean(bootpar,axis=0)
