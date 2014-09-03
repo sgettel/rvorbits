@@ -11,7 +11,7 @@ from utils import * #just fan for now
 
 
 #Given a target name, do everything!
-def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.45e6,circ=0):
+def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0):
     
     #read RV data 
     jdb, rv, srv, labels = rr.process_all(targname,maxsrv=5,maxrv=-50000)
@@ -242,7 +242,7 @@ def rv_drive(orbel, t):
         M = 2.0*np.pi*( ((t-tp)/p) - np.floor((t-tp)/p) ) #phase in radians
         
         E1 = kepler(M,ecc) #returns a matrix, because fan
-        E1 = E1[0,:]
+        #E1 = E1[0,:]       #1 planet at a time
         #calculate true anomaly
         n1 = 1.0 + ecc
         n2 = 1.0 - ecc
@@ -276,18 +276,18 @@ def kepler(inM,inecc):
     else:
         marr = inM
     if len(np.array(inecc).shape) == 0:
-        eccarr = np.array([inecc])
+        ecc = np.array([inecc])
     else:
-        eccarr = inecc
+        ecc = inecc
     
-    nm = marr.size
-    nec = eccarr.size
-    if nec == 1 and nm > 1:   #Do I need this?
-        eccarr = fan(eccarr,nm)
-    if nec > 1 and nm == 1:
-        marr = fan(marr,nec)
+    nm = marr.size    #nm = nrv, ~100
+    nec = ecc.size #nec = 1
+    #if nec == 1 and nm > 1:   #Get rid of this...
+    #    eccarr = fan(eccarr,nm)
+    #if nec > 1 and nm == 1:
+    #    marr = fan(marr,nec)
 
-    conv = 1e-12 #convergence criteria
+    conv = 1e-9 #convergence criteria, was 1e-12 originally
     k = 0.85     #scale factor?
     
     mphase = marr/(2.0*np.pi)
@@ -302,8 +302,8 @@ def kepler(inM,inecc):
     ssm = np.sign(np.sin(marr))
 
     #make first guess at E
-    Earr = marr + ssm*k*eccarr
-    fiarr = (Earr - eccarr*np.sin(Earr) - marr) #E - ecc*sin(E) - M, converge to 0
+    Earr = marr + ssm*k*ecc
+    fiarr = (Earr - ecc*np.sin(Earr) - marr) #E - ecc*sin(E) - M, converge to 0
 
     convd = np.squeeze(np.where(np.abs(fiarr) > conv)) #which indices converged?
     nd = convd.size
@@ -312,7 +312,7 @@ def kepler(inM,inecc):
     while nd > 0:          #while unconverged elements exist...
         count += 1
         M = marr[convd]    #just keep the unconverged elements
-        ecc = eccarr[convd]
+        #ecc = eccarr[convd]
         E = Earr[convd]
         
         fi = fiarr[convd]        #fi = E - e*sin(E)-M,  should go to 0
@@ -325,7 +325,7 @@ def kepler(inM,inecc):
         d3 = -fi/(fip + d2*fipp/2.0 + d2*d2*fippp/6.0) #third order correction
         E += d3
         Earr[convd] = E
-        fiarr = (Earr - eccarr*np.sin(Earr) - marr)
+        fiarr = (Earr - ecc*np.sin(Earr) - marr)
         convd = np.squeeze(np.where(np.abs(fiarr) > conv))
         nd = convd.size
         if count > 100:
