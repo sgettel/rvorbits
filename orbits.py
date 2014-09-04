@@ -11,23 +11,36 @@ from utils import * #just fan for now
 
 
 #Given a target name, do everything!
-def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0):
-    
-    #read RV data 
-    jdb, rv, srv, labels = rr.process_all(targname,maxsrv=5,maxrv=-50000)
-    
-    #demo!
-    #sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
-    #jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
-    
+def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5):
 
+    transit = np.zeros(1)
 
+    #read RV data
+    if targname == 'HD209458':
+        #demo!
+        sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
+        jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
+
+    else:
+        if targname == 'test':
+            #use KOI-69 epochs
+            jdb, rv0, srv, labels = rr.process_all('K00069',maxsrv=maxsrv,maxrv=maxrv,minrv=minrv) 
+            guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329, 0.0])
+            transit = np.array([2454944.29227])
+            mstar = 0.887
+            print np.min(rv0),np.max(rv0)
+            rv = rv_drive(guesspars, jdb) #+ np.random....
+        else:
+            print targname
+            jdb, rv, srv, labels = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
+    
+     
     #adjust values to be sensible
     #if jdb[0] > epoch:
     #    print 'truncating dates'
     tnorm = jdb - epoch #truncate
     rvnorm = rv - np.median(rv)
-    print np.min(rvnorm),np.max(rvnorm)
+    print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
     
   
     #read Mstar
@@ -45,10 +58,10 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     #gamma = orbel[5+i*7]
     #dvdt = orbel[6+i*7]
     #curv = 0 
-    transit = np.zeros(1)
+    
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.01, 0.0])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01, 0.0])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
@@ -80,6 +93,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     else:
         curv = 0
 
+    print guesspars
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,trend=trend,circ=circ,tt=transit,epoch=epoch)
     m0 = np.copy(m)
 
@@ -109,13 +123,15 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
 
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
-    #model_init = rv_drive(guesspars,tmod)
+    model_init = rv_drive(guesspars,tmod) #+ m.params[5] #- guesspars[5] #why do I need this?
     model_final = rv_drive(m.params,tmod)
+    print guesspars
+    print m.params
 
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
-    #plt.plot(tmod,model_init,'g-')
+    plt.plot(tmod,model_init,'g-')
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
@@ -123,16 +139,19 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     pars = np.copy(m.params)
     pars[6] = 0 #remove trend
     pars3 = np.copy(m.params)
-    pars3[4] = 0.0 #still not sure why this is used
+    pars3[4] = 0.0 #include trend
     pars3[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
     print phase[0:10]
     rvt = rv_drive(pars3,jdb)
+
+    
     #print rvt[0:10]
 
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
+    #plt.plot((tmod - guess))
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
     
@@ -376,7 +395,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
     bootpar = np.zeros((nboot,bestpar.size))
     
     for i in range(nboot): #get rid of the for loop...
-        if i%50 == 0:
+        if i%100 == 0:
             print (i+0.0)/nboot*100,'%'
         #print i 
         scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
