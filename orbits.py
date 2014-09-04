@@ -24,16 +24,19 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     else:
         if targname == 'test':
             #use KOI-69 epochs
-            jdb, rv0, srv, labels = rr.process_all('K00069',maxsrv=maxsrv,maxrv=maxrv,minrv=minrv) 
+            jdb, rv0, srv, labels = rr.process_all('K00069',maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
+            
             guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329, 0.0])
             transit = np.array([2454944.29227])
             mstar = 0.887
             print np.min(rv0),np.max(rv0)
-            rv = rv_drive(guesspars, jdb) #+ np.random....
+            scl = np.median(srv)*10
+            #add some noise
+            rv = rv_drive(guesspars, jdb) + np.random.normal(loc=0.0,scale=scl,size=rv0.size)
         else:
             print targname
             jdb, rv, srv, labels = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
-    
+        jdb += 2.4e6 #because process_all gives truncated JDBs
      
     #adjust values to be sensible
     #if jdb[0] > epoch:
@@ -92,8 +95,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
         curv = 1
     else:
         curv = 0
-
-    print guesspars
+    
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,trend=trend,circ=circ,tt=transit,epoch=epoch)
     m0 = np.copy(m)
 
@@ -121,28 +123,29 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
 
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
-
+   
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
-    model_init = rv_drive(guesspars,tmod) #+ m.params[5] #- guesspars[5] #why do I need this?
+
+    #guesspars2 = np.copy(guesspars)
+    model_init = rv_drive(guesspars,tmod) # something wrong if trend
     model_final = rv_drive(m.params,tmod)
-    print guesspars
-    print m.params
+    
 
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
-    plt.plot(tmod,model_init,'g-')
+    #plt.plot(tmod,model_init,'g-')
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
     #phase at first period - only taking 1 period right now...
-    pars = np.copy(m.params)
+    pars = np.copy(m.params)  #for model
     pars[6] = 0 #remove trend
-    pars3 = np.copy(m.params)
-    pars3[4] = 0.0 #include trend
+    pars3 = np.copy(m.params) #for obs
+    pars3[4] = 0.0 #trend only
     pars3[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
-    print phase[0:10]
+    
     rvt = rv_drive(pars3,jdb)
 
     
@@ -211,7 +214,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0, tt=np.zeros(1),epoch=2.455e6):
-
+    
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
     else:
@@ -309,7 +312,7 @@ def rv_drive(orbel, t):
 
     return rv
 
-#def rv_drive_noloop():
+
 
 #Iteratively solve for E (anomoly) given M (mean anomoly) and e (eccentricity)
 #@profile
