@@ -15,20 +15,23 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     
     #read RV data 
     jdb, rv, srv, labels = rr.process_all(targname,maxsrv=5,maxrv=-50000)
-    print np.min(rv),np.max(rv)
+    
     #demo!
     #sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
     #jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
+    
+
 
     #adjust values to be sensible
-    if jdb[0] > epoch:
-        jdb -= epoch #truncate
-    rv -= np.median(rv)
-
-    tstart = jdb[0]
+    #if jdb[0] > epoch:
+    #    print 'truncating dates'
+    tnorm = jdb - epoch #truncate
+    rvnorm = rv - np.median(rv)
+    print np.min(rvnorm),np.max(rvnorm)
+    
   
     #read Mstar
-    mstar = 1.0
+    
     #Mstar = 1.69
 
     #process offsets - very not implemented 
@@ -42,13 +45,31 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     #gamma = orbel[5+i*7]
     #dvdt = orbel[6+i*7]
     #curv = 0 
-        
-    #guesspars = np.array([3.524733, 2452836.1, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.0])#HD209458
-    guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.01]) #K00273
+    transit = np.zeros(1)
+
+    if targname == 'HD209458':
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-5, 0.01, 0.0])#HD209458
+        transit = np.array([2452826.628514]) 
+        mstar = 1.0
+    
+    if targname == 'K00273':
+        guesspars = np.array([10.57377, 2455008.066, 0.0, 270.0, 1.7358979, -3398.0498, 1.1889011, 0.01]) #K00273
+        transit = np.array([2455008.066]) 
+        mstar = 1.07
+    
+    if targname == 'K00069':
+        guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329, 0.0])
+        transit = np.array([2454944.29227])
+        mstar = 0.887
+
+    guesspars[1] -= epoch
+    if not transit == 0.0:
+        transit -= epoch 
+        print 'set transit time: ', transit
     if guesspars[1] > epoch:
         guesspars[1] -= epoch #truncate
-
-    if guesspars[6] > 0:
+    
+    if not guesspars[6] == 0:
         trend = 1
     else:
         trend = 0
@@ -59,7 +80,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     else:
         curv = 0
 
-    m = rvfit_lsqmdl(guesspars, jdb, rv, srv, jitter=jitter,trend=trend,circ=circ)
+    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,trend=trend,circ=circ,tt=transit,epoch=epoch)
     m0 = np.copy(m)
 
     
@@ -71,11 +92,11 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=200)
+    plot_rv(targname,tnorm,rvnorm,srv,guesspars,m,nmod=200)
     
     #call bootstrapping
     if nboot > 0:
-        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, jdb, rv, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv)
+        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit)
    
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
        
@@ -94,6 +115,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
+    #plt.plot(tmod,model_init,'g-')
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
@@ -104,6 +126,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     pars3[4] = 0.0 #still not sure why this is used
     pars3[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
+    print phase[0:10]
     rvt = rv_drive(pars3,jdb)
     #print rvt[0:10]
 
@@ -168,7 +191,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
         return mpsini
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0, tt=np.zeros(1),epoch=2.455e6):
 
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -179,18 +202,22 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0)
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt', 'curv'] 
 
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
-    m.set_func(rv_drive,param_names, args=[jdb])
+    m.set_func(rv_drive,param_names, args=[jdb] )
 
     #make some reasonable limits
     #m.lm_prob.p_limit(0, lower=0.1, upper=(np.max(jdb)-np.min(jdb))) #per no longer than range of survey
-    m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/4., upper=orbel[1]+orbel[0]/4.) #T0 within one period guess
+    #m.lm_prob.p_limit(1, lower=orbel[1]-orbel[0]/4., upper=orbel[1]+orbel[0]/4.) #T0 within one period guess
     m.lm_prob.p_value(0, orbel[0], fixed=True)
     #m.lm_prob.p_value(1, orbel[1], fixed=True)
-    if circ > 0:
+
+    if circ > 0:                               #fix ecc=0
         m.lm_prob.p_value(2, 0.0, fixed=True)
+        if not tt[0] == 0:                     #if transit time set, fix tp = tt & thus omega = 90
+            m.lm_prob.p_value(1, tt[0], fixed=True)
+            m.lm_prob.p_value(3, 90.0, fixed=True)
     else:
         m.lm_prob.p_limit(2, lower=0.0, upper=0.99) #ecc must be physical
-    #m.lm_prob.p_value(3, 90.0, fixed=True)    
+    
     m.lm_prob.p_limit(3, lower=0.0, upper=360.0)
     m.lm_prob.p_limit(4, lower=0.0, upper=1.0e5) #K must be physical  
     if not trend == 1:
@@ -212,7 +239,7 @@ def rv_drive(orbel, t):
     nplanets = orbel.size/7 
 
     phase = np.zeros((rv.size,nplanets))
-    #print orbel
+    
     for i in range(nplanets):  #get rid of the for loops...
         p = orbel[0+i*7]
         tp = orbel[1+i*7]
@@ -257,8 +284,9 @@ def rv_drive(orbel, t):
         phase[:,i] = phase0
 
         #calculate radial velocity
-        epoch = t[0]
-        rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma + dvdt*(t - epoch) + curv*(t - epoch)**2 #default epoch = t[0]
+        epoch = 0.0 #Keep this
+        
+        rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma + dvdt*(t - epoch) + curv*(t - epoch)**2 
 
     return rv
 
@@ -287,7 +315,7 @@ def kepler(inM,inecc):
     #if nec > 1 and nm == 1:
     #    marr = fan(marr,nec)
 
-    conv = 1e-9 #convergence criteria, was 1e-12 originally
+    conv = 1e-12 #convergence criteria
     k = 0.85     #scale factor?
     
     mphase = marr/(2.0*np.pi)
@@ -334,7 +362,7 @@ def kepler(inM,inecc):
 
     return Earr
 
-def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=0):
+def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=0,tt=np.zeros(1)):
     #based on the general method of bootpar.pro by SXW
     #Wow, this is slow! Make faster
 
@@ -355,7 +383,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
         tmprv = resid[scramble] + bestfit            #scramble residuals
         tmperr = srv[scramble]                      #error goes with individual residual
 
-        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,curv=curv,trend=trend)
+        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,curv=curv,trend=trend,tt=tt)
         bootpar[i,:] = mi.params
 
     meanpar = np.mean(bootpar,axis=0)
