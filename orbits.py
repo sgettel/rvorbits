@@ -1,13 +1,22 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #from __future__ import print_function #interface Python 2/3, need this?
+import emcee
 import numpy as np
 import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
 from pwkit import lsqmdl
 from utils import * #just fan for now
 
-
+#
+# TO DO:
+# - print output to file
+# - histogram plots
+# - fix TT for eccentric orbits
+# - multiple planets
+# - read orbit params from somewhere
+# - add offset terms
+# - MCMC
 
 
 #Given a target name, do everything!
@@ -416,3 +425,30 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
 #to run as ...orbits.py
 if __name__ == '__main__':
     orbits_test(nboot=10)
+
+#begin MCMC setup - following emcee line-fitting demo
+def lnprior(theta):
+    
+    # = theta
+    # if a bunch of conditions are met:
+    #    return 0.0
+    #else
+    return -np.inf
+
+def lnprob(theta, jdb, rv, srv):
+    lp = lnprior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + lnlike(theta, jdb, rv, srv)
+
+#def lnlike():
+#write me!
+
+def call_emcee(bestpars, ndim=3, nwalkers=100):
+    #using the values from the demo, which are wrong
+
+    #Initialize walkers in tiny Gaussian ball around MLE results
+    pos = [bestpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
+    sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv))
+
+    #
