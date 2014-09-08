@@ -2,6 +2,7 @@
 
 #from __future__ import print_function #interface Python 2/3, need this?
 import emcee
+import triangle
 import numpy as np
 import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
@@ -127,7 +128,12 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
        
         print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
 
-    return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+        return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+        
+    else:
+
+        setup_emcee(m.params, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transits, jitter=jitter)
+    
 
 
 
@@ -429,26 +435,57 @@ if __name__ == '__main__':
 #begin MCMC setup - following emcee line-fitting demo
 def lnprior(theta):
     
+    #this is where I include sensible physical limits on params!
+
     # = theta
     # if a bunch of conditions are met:
     #    return 0.0
     #else
     return -np.inf
 
-def lnprob(theta, jdb, rv, srv):
+def lnprob(theta, jdb, rv, srv, fullpars, flt):
     lp = lnprior(theta)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + lnlike(theta, jdb, rv, srv)
+    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt)
 
-#def lnlike():
-#write me!
+def lnlike(theta, jdb, rv, srv, fullpars, flt):
+    
+    #theta probably includes fixed parameters - help?
+    model = rv_drive(fullpars, jdb)
+    
+    return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def call_emcee(bestpars, ndim=3, nwalkers=100):
-    #using the values from the demo, which are wrong
+def setup_emcee(bestpars, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
 
+    if jitter > 0.0: #this should happen in rvfit_lsqmdl
+        nsrv = np.sqrt(srv**2 + jitter**2)
+    else:
+        nsrv = srv
+
+    #separate the params being varied from the full list...
+    flt = np.zeros()
+    varpars = bestpars[flt]
+    ndim = varpars.size
+
+    run_emcee(bestpars, varpars, flt, ndim, nwalkers=nwalkers)
+
+    return
+
+def run_emcee(bestpars, varpars, flt, ndim, nwalkers=100):
+    
     #Initialize walkers in tiny Gaussian ball around MLE results
-    pos = [bestpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
-    sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv))
+    #number of params comes from bestpars
+    pos = [varpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
+    sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
 
-    #
+    #Run 500 steps of MCMC
+    sampler.run_mcmc(pos, 500)
+
+    #It takes a number of iterations to spread walkers throughout param space
+    #This is 'burning in'
+    samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+
+    #fig = triangle.corner() #makes nice plots...
+    
+    return #stuff
