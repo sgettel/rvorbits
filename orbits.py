@@ -7,8 +7,8 @@ import triangle
 import numpy as np
 import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
+import utils as ut
 from pwkit import lsqmdl
-from utils import * #just fan for now
 
 #
 # TO DO:
@@ -26,7 +26,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
 modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no'):
 
     transit = np.zeros(1)
-    print webdat, ' in orbits_test'
+    
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
     	home = '/Users/Sara/'
     else:
@@ -141,9 +141,9 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
         
     else:
 
-        setup_emcee(m.params, tnorm, rvnorm, srv, m.names, circ=circ, trend=trend, curv=curv, tt=transits, jitter=jitter)
+        m, flt, samples = setup_emcee(m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter)
     
-
+        return m, flt, samples# bestpars, varpars, flt, pnames # 
 
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sgettel/'):
@@ -345,8 +345,8 @@ def kepler(inM,inecc):
     #SJG Aug 2014
 
     #make floats into arrays
-    marr = arrayify(inM)
-    ecc = arrayify(inecc)
+    marr = ut.arrayify(inM)
+    ecc = ut.arrayify(inecc)
     
 #    if len(np.array(inM).shape) == 0:
 #        marr = np.array([inM])
@@ -444,19 +444,28 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
 if __name__ == '__main__':
     orbits_test(webdat='yes',nboot=10)
 
+
 #begin MCMC setup - following emcee line-fitting demo
-def lnprior(theta):
+def lnprior(theta, fullpars, flt, pnames):
     
-    #this is where I include sensible physical limits on params!
+    #some pretty basic limits for flat priors
+    low = np.array([0.1, 0.0, 0.0, 0.0, 0.0, -1e6, -1e6, -1e6])
+    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e6, 1e6, 1e6, 1e6])
 
-    # = theta
-    # if a bunch of conditions are met:
-    #    return 0.0
-    #else
-    return -np.inf
+    #figure out which params are varied and the associated limits
+    pfloat = pnames[flt.nonzero()]
+    lfloat = low[flt.nonzero()]
+    hfloat = high[flt.nonzero()]
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt):
-    lp = lnprior(theta)
+
+    if (theta > lfloat).all() and (theta < hfloat).all():
+        return 0.0
+    else:
+        return -np.inf
+    
+
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames):
+    lp = lnprior(theta, fullpars, flt, pnames)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lnlike(theta, jdb, rv, srv, fullpars, flt)
@@ -468,7 +477,9 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt):
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def setup_emcee(bestpars, jdb, rv, srv, pnames, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
+def setup_emcee(m, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
+
+    bestpars = m.params
 
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -486,6 +497,7 @@ def setup_emcee(bestpars, jdb, rv, srv, pnames, nwalkers=100, circ=0, trend=0, c
 
     #How many planets?
     npars = bestpars.size
+    
     norbits = npars/7
 
     ip = np.arange(norbits) #index for planets
@@ -493,7 +505,7 @@ def setup_emcee(bestpars, jdb, rv, srv, pnames, nwalkers=100, circ=0, trend=0, c
         ip2 = np.arange(norbits-1)+1 #index for planets after 1st one
 
     #separate the params being varied from the full list
-    flt = np.ones(jdb.size) #all params float now, turn off individually
+    flt = np.ones(npars) #all params float now, turn off individually
 
     #force fix period for now
     flt[0+ip*7] = 0
@@ -512,29 +524,32 @@ def setup_emcee(bestpars, jdb, rv, srv, pnames, nwalkers=100, circ=0, trend=0, c
         flt[6+ip2*7] = 0 #same for dvdt
     
     #if curv = 1, flt[-1] = 1, but this already happens
-
+    print flt
     varpars = bestpars[flt.nonzero()]
     ndim = varpars.size
-    print 'MCMC params: ',pnames[flt.nonzero()]
+    pnames = np.copy(m.pnames)
+    print 'MCMC params: ',pnames[flt.nonzero()] 
+    
+    samples = run_emcee(bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
 
-    run_emcee(bestpars, varpars, flt, ndim, nwalkers=nwalkers)
+    return m, flt, samples
+   # return bestpars, varpars, flt, pnames
 
-    return
 
-def run_emcee(bestpars, varpars, flt, ndim, nwalkers=100):
+def run_emcee(bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=100, nsteps=1000):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     pos = [varpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames))
 
     #Run 500 steps of MCMC
-    sampler.run_mcmc(pos, 500)
+    sampler.run_mcmc(pos, nsteps)
 
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
-    samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+    samples = sampler.chain[:, 200:, :].reshape((-1, ndim))
 
-    fig = triangle.corner() #makes nice plots...
+    #fig = triangle.corner() #makes nice plots...
     
-    return #stuff
+    return sampler.chain
