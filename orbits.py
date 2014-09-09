@@ -77,7 +77,7 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
     #k = orbel[4+i*7]
     #gamma = orbel[5+i*7]
     #dvdt = orbel[6+i*7]
-    #curv = 0 
+    #curv = orbel[-1], optional
     
 
     if targname == 'HD209458':
@@ -107,13 +107,15 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
     else:
         trend = 0
 
-    if not guesspars[7] == 0:
-        print 'parabolic term allowed'
+    npars = guesspars.size
+    if npars % 7 == 1: #1 too many params
         curv = 1
+        print 'parabolic term allowed'
     else:
         curv = 0
     
-    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,trend=trend,circ=circ,tt=transit,epoch=epoch)
+    
+    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,trend=trend,circ=circ, curv=curv,tt=transit,epoch=epoch)
     m0 = np.copy(m)
 
     
@@ -139,7 +141,7 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
         
     else:
 
-        setup_emcee(m.params, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transits, jitter=jitter)
+        setup_emcee(m.params, tnorm, rvnorm, srv, m.names, circ=circ, trend=trend, curv=curv, tt=transits, jitter=jitter)
     
 
 
@@ -343,14 +345,17 @@ def kepler(inM,inecc):
     #SJG Aug 2014
 
     #make floats into arrays
-    if len(np.array(inM).shape) == 0:
-        marr = np.array([inM])
-    else:
-        marr = inM
-    if len(np.array(inecc).shape) == 0:
-        ecc = np.array([inecc])
-    else:
-        ecc = inecc
+    marr = arrayify(inM)
+    ecc = arrayify(inecc)
+    
+#    if len(np.array(inM).shape) == 0:
+#        marr = np.array([inM])
+#    else:
+#        marr = np.array(inM)
+#    if len(np.array(inecc).shape) == 0:
+#        ecc = np.array([inecc])
+#    else:
+#        ecc = np.array(inecc)
     
     nm = marr.size    #nm = nrv, ~100
     nec = ecc.size #nec = 1
@@ -463,7 +468,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt):
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def setup_emcee(bestpars, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
+def setup_emcee(bestpars, jdb, rv, srv, pnames, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
 
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -479,12 +484,38 @@ def setup_emcee(bestpars, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, t
     #dvdt = orbel[6+i*7]
     #curv = 0 
 
+    #How many planets?
+    npars = bestpars.size
+    norbits = npars/7
 
-    #separate the params being varied from the full list...
-    flt = np.zeros(jdb.size) #this will be a logic array
+    ip = np.arange(norbits) #index for planets
+    if norbits > 1:
+        ip2 = np.arange(norbits-1)+1 #index for planets after 1st one
 
-    varpars = bestpars[flt]
+    #separate the params being varied from the full list
+    flt = np.ones(jdb.size) #all params float now, turn off individually
+
+    #force fix period for now
+    flt[0+ip*7] = 0
+    
+    if circ > 0:   
+        flt[2+ip*7] = 0  #fix ecc - this fixes all planets, BAD
+        if not tt[0] == 0:
+            flt[1+ip*7] = 0 #if tt known, fix tp - also all planets
+            flt[3+ip*7] = 0 #also fix omega - also all planets
+
+    #want some testing that the output of LM is sensible!
+    #need to consider eccentric transiting planets...
+
+    if norbits > 1:
+        flt[5+ip2*7] = 0 #always force fix all gammas except 1st
+        flt[6+ip2*7] = 0 #same for dvdt
+    
+    #if curv = 1, flt[-1] = 1, but this already happens
+
+    varpars = bestpars[flt.nonzero()]
     ndim = varpars.size
+    print 'MCMC params: ',pnames[flt.nonzero()]
 
     run_emcee(bestpars, varpars, flt, ndim, nwalkers=nwalkers)
 
@@ -493,17 +524,17 @@ def setup_emcee(bestpars, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, t
 def run_emcee(bestpars, varpars, flt, ndim, nwalkers=100):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
-    #number of params comes from bestpars
+    #number of params comes from varpars
     pos = [varpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
-    #sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
 
     #Run 500 steps of MCMC
-    #sampler.run_mcmc(pos, 500)
+    sampler.run_mcmc(pos, 500)
 
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
-    #samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+    samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
 
-    #fig = triangle.corner() #makes nice plots...
+    fig = triangle.corner() #makes nice plots...
     
     return #stuff
