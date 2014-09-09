@@ -81,17 +81,17 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
     
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01, 0.0])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.57377, 2455008.066, 0.0, 270.0, 1.7358979, -3398.0498, 1.1889011, 0.01]) #K00273
+        guesspars = np.array([10.57377, 2455008.066, 0.0, 270.0, 1.7358979, -3398.0498, 1.1889011]) #K00273
         transit = np.array([2455008.066]) 
         mstar = 1.07
     
     if targname == 'K00069':
-        guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329, 0.0])
+        guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
         transit = np.array([2454944.29227])
         mstar = 0.887
 
@@ -135,7 +135,7 @@ modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, web
    
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
        
-        print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits)
+        print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
 
         return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
         
@@ -163,8 +163,9 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sget
     plt.close(1)
 
     #phase at first period - only taking 1 period right now...
+    #this breaks for non-zero curvature! FIX!!!
     pars = np.copy(m.params)  #for model
-    pars[6] = 0 #remove trend
+    pars[6] = 0 #remove trend, should also remove curv
     pars3 = np.copy(m.params) #for obs
     pars3[4] = 0.0 #trend only
     pars3[5] = 0.0
@@ -186,7 +187,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sget
 #    print targname
 #    plot histograms!
 
-def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
+def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
     
     for i in range(norbits):
         print '*****Planet ',str(i+1),' errors:*****'
@@ -197,7 +198,8 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1):
         print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
-        print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
+        if curv == 1:
+            print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini*100),'%'
     return
@@ -245,7 +247,10 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         nsrv = srv
 
     if param_names == 0: #do something more clever here later
-        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt', 'curv'] 
+        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt'] 
+        if curv == 1:
+            param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'dvdt','curv']
+    
 
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
     m.set_func(rv_drive,param_names, args=[jdb] )
@@ -268,8 +273,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     m.lm_prob.p_limit(4, lower=0.0, upper=1.0e5) #K must be physical  
     if not trend == 1:
         m.lm_prob.p_value(6, 0.0, fixed=True) #fix dvdt
-    if not curv == 1:
-        m.lm_prob.p_value(7, 0.0, fixed=True) #fix parabolic term
+    #if not curv == 1:
+    #    m.lm_prob.p_value(7, 0.0, fixed=True) #fix parabolic term
 
     m.solve(orbel)
     #m.print_soln()
@@ -449,8 +454,8 @@ if __name__ == '__main__':
 def lnprior(theta, fullpars, flt, pnames):
     
     #some pretty basic limits for flat priors
-    low = np.array([0.1, 0.0, 0.0, 0.0, 0.0, -1e6, -1e6, -1e6])
-    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e6, 1e6, 1e6, 1e6])
+    low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1])
+    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1])
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
@@ -472,12 +477,15 @@ def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames):
 
 def lnlike(theta, jdb, rv, srv, fullpars, flt):
     
-    #theta probably includes fixed parameters - help?
-    model = rv_drive(fullpars, jdb)
+    #TODO: combine theta with fixed pars!
+    newpars = np.copy(fullpars)
+    newpars[flt.nonzero()] = theta
+    
+    model = rv_drive(newpars, jdb)
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def setup_emcee(m, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): #plus lots of keywords...
+def setup_emcee(m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): 
 
     bestpars = m.params
 
@@ -550,6 +558,7 @@ def run_emcee(bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=100, 
     #This is 'burning in'
     samples = sampler.chain[:, 200:, :].reshape((-1, ndim))
 
-    #fig = triangle.corner() #makes nice plots...
+    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) #makes nice plots...
+    fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/triangle.png')
     
     return sampler.chain
