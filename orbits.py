@@ -2,6 +2,7 @@
 
 #from __future__ import print_function #interface Python 2/3, need this?
 import emcee
+import socket
 import triangle
 import numpy as np
 import read_rdb_harpsn as rr
@@ -21,20 +22,26 @@ from utils import * #just fan for now
 
 
 #Given a target name, do everything!
-def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5):
+def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,modelrange=0,
+modelstep=0.1,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no'):
 
     transit = np.zeros(1)
+    print webdat, ' in orbits_test'
+    if socket.gethostname() == 'sara-gettels-macbook-2.local':
+    	home = '/Users/Sara/'
+    else:
+    	home = '/home/sgettel/'
 
     #read RV data
     if targname == 'HD209458':
         #demo!
-        sfile = open('/home/sgettel/Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
+        sfile = open(home+'Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
         jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
 
     else:
         if targname == 'test':
             #use KOI-69 epochs
-            jdb, rv0, srv, labels = rr.process_all('K00069',maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
+            jdb, rv0, srv, labels = rr.process_all('K00069',maxsrv=maxsrv,maxrv=maxrv,minrv=minrv, webdat=webdat)
             
             guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329, 0.0])
             transit = np.array([2454944.29227])
@@ -118,7 +125,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,tnorm,rvnorm,srv,guesspars,m,nmod=200)
+    plot_rv(targname,tnorm,rvnorm,srv,guesspars,m,nmod=200,home=home)
     
     #call bootstrapping
     if nboot > 0:
@@ -137,7 +144,7 @@ def orbits_test(targname='K00273',norbits=1,nterms=0,jitter=0.0,modelstart=0,mod
 
 
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sgettel/'):
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
@@ -150,7 +157,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
     #plt.plot(tmod,model_init,'g-')
-    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
     #phase at first period - only taking 1 period right now...
@@ -170,7 +177,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1):
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
     #plt.plot((tmod - guess))
-    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
     
 #def plot_pars(targname,bootpars,mparr_all,norbits=1):
@@ -430,7 +437,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
 
 #to run as ...orbits.py
 if __name__ == '__main__':
-    orbits_test(nboot=10)
+    orbits_test(webdat='yes',nboot=10)
 
 #begin MCMC setup - following emcee line-fitting demo
 def lnprior(theta):
@@ -463,8 +470,19 @@ def setup_emcee(bestpars, jdb, rv, srv, nwalkers=100, circ=0, trend=0, curv=0, t
     else:
         nsrv = srv
 
+    #p = orbel[0+i*7]
+    #tp = orbel[1+i*7]
+    #ecc = orbel[2+i*7]
+    #om = orbel[3+i*7] *np.pi/180. #degrees to radians
+    #k = orbel[4+i*7]
+    #gamma = orbel[5+i*7]
+    #dvdt = orbel[6+i*7]
+    #curv = 0 
+
+
     #separate the params being varied from the full list...
-    flt = np.zeros()
+    flt = np.zeros(jdb.size) #this will be a logic array
+
     varpars = bestpars[flt]
     ndim = varpars.size
 
@@ -477,14 +495,14 @@ def run_emcee(bestpars, varpars, flt, ndim, nwalkers=100):
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from bestpars
     pos = [varpars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)] #??
-    sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
+    #sampler = emcee.Ensemble Sampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt))
 
     #Run 500 steps of MCMC
-    sampler.run_mcmc(pos, 500)
+    #sampler.run_mcmc(pos, 500)
 
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
-    samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+    #samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
 
     #fig = triangle.corner() #makes nice plots...
     
