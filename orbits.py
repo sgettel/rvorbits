@@ -28,6 +28,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
+    print pfix
 
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
     	home = '/Users/Sara/'
@@ -77,10 +78,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     if targname == 'K00273':
         guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0]) #K00273
-        transit = np.array([2455008.066]) 
+        transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        #guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 400.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
+        #guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 1400.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -91,9 +92,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     ip = np.arange(norbits)
     guesspars[1+ip*7] -= epoch
 
-    if not transit == 0.0:
-        transit -= epoch 
-        print 'set transit time: ', transit
+    for i in range(transit.size):  #do something more clever here...
+        if not transit[i] == 0.0:
+            transit[i] -= epoch 
+            print 'set transit time: ', transit
  
     if not guesspars[6] == 0: #only set for 1st planet
         trend = 1
@@ -124,7 +126,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     #call bootstrapping
     if nboot > 0:
-        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit)
+        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit,pfix=pfix)
    
         mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
        
@@ -158,7 +160,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sget
     plt.close(1)
 
     #phase at first period - only taking 1 period right now - LEFT OFF HERE
-    #this breaks for non-zero curvature! FIX!!!
+    
     pars = np.copy(m.params)  #for model
     pars[6] = 0 #remove trend
     if pars.size % 7 == 1: #remove curve if it is used
@@ -254,6 +256,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
     m.set_func(rv_drive,param_names, args=[jdb] )
 
+    #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
     for i in range(norbits):
 
@@ -262,7 +265,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         if pfix[i] == 1:
             m.lm_prob.p_value(0+i*7, orbel[0+i*7], fixed=True)
         else:
-            m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))) #per no longer than range of survey 
+            m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*10) #per no longer than 10x range of survey 
         
         #limit Tp
         m.lm_prob.p_limit(1+i*7, lower=orbel[1+i*7]-orbel[0+i*7]/4., upper=orbel[1+i*7]+orbel[0+i*7]/4.) #T0 within one period guess
@@ -441,7 +444,7 @@ def kepler(inM,inecc):
 
     return Earr
 
-def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=0,tt=np.zeros(1)):
+def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=0,tt=np.zeros(1),pfix=1):
     #based on the general method of bootpar.pro by SXW
     #Wow, this is slow! Make faster
 
@@ -462,7 +465,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
         tmprv = resid[scramble] + bestfit            #scramble residuals
         tmperr = srv[scramble]                      #error goes with individual residual
 
-        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,curv=curv,trend=trend,tt=tt)
+        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,curv=curv,trend=trend,tt=tt,pfix=pfix)
         bootpar[i,:] = mi.params
 
     meanpar = np.mean(bootpar,axis=0)
@@ -479,8 +482,8 @@ if __name__ == '__main__':
 def lnprior(theta, fullpars, flt, pnames):
     
     #some pretty basic limits for flat priors
-    low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1, -1])
-    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1, 1])
+    low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1e3, -1])
+    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1e3, 1])
 
 
     #figure out which params are varied and the associated limits
@@ -570,11 +573,12 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
    # return bestpars, varpars, flt, pnames
 
 
-def run_emcee(targname, bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=2000):
+def run_emcee(targname, bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
-    pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
+    #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
+    pos = [varpars + 1e-2*varpars*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames))
 
     #Run MCMC
