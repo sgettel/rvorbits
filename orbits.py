@@ -77,11 +77,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0]) #K00273
+        #guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0]) #K00273
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        #guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 1400.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
+        guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 1400.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -143,7 +143,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     else:
         return
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sgettel/'):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
@@ -159,29 +159,44 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,norbits=1,home='/home/sget
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
-    #phase at first period - only taking 1 period right now - LEFT OFF HERE
-    
-    pars = np.copy(m.params)  #for model
-    pars[6] = 0 #remove trend
-    if pars.size % 7 == 1: #remove curve if it is used
-        pars[-1] = 0
-    pars3 = np.copy(m.params) #for obs
-    pars3[4] = 0.0 #trend only
-    pars3[5] = 0.0
-    phase = (jdb - pars[1])/pars[0] % 1.0
-    
-    rvt = rv_drive(pars3,jdb)
+    #phase at first period  - LEFT OFF HERE
+    norbits = m.params.size/7
 
-    
+    if norbits == 1:
+        pars = np.copy(m.params)  #for model
+        pars[6] = 0 #remove trend
+        if pars.size % 7 == 1: #remove curve if it is used
+            pars[-1] = 0
+        parst = np.copy(m.params) #for obs
+        parst[4] = 0.0 #trend only
+        parst[5] = 0.0
+        phase = (jdb - pars[1])/pars[0] % 1.0
+        
+        rvt = rv_drive(parst,jdb)   
     #print rvt[0:10]
-
-    plt.figure(2)
-    plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
+        plt.figure(2)
+        plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
+        plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
     #plt.plot((tmod - guess))
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
-    plt.close(2)
-    
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
+        plt.close(2)
+
+    else:
+        pars = m.params[0:7]  #for model 
+        pars[6:] = 0 #select first planet only
+        
+        parst = np.copy(m.params)
+        parst[4] = 0.0 #other planets only
+        parst[5] = 0.0
+        phase = (jdb - pars[1])/pars[0] % 1.0
+        rvt = rv_drive(parst,jdb)   
+        plt.figure(2)
+        plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
+        plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
+    #plt.plot((tmod - guess))
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
+        plt.close(2)
+
 #def plot_pars(targname,bootpars,mparr_all,norbits=1):
 #    print targname
 #    plot histograms!
