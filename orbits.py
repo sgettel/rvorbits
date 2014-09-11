@@ -81,7 +81,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 1400.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
+        guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 500.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -137,7 +137,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #call MCMC    
     if nwalkers > 0:
 
-        m, flt, samples = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter, nwalkers=nwalkers)
+        m, flt, samples = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
     
         return m, flt, samples# bestpars, varpars, flt, pnames # 
     else:
@@ -202,7 +202,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
 #    plot histograms!
 
 def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
-    
+    print mparr_all.shape
     for i in range(norbits):
         print '*****Planet ',str(i+1),' errors:*****'
         print 'Per: ', str(meanpar[i*7]),'+/-',str(sigpar[i*7])
@@ -215,10 +215,10 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
         if curv == 1:
             print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
-        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini*100),'%'
+        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
     return
 
-def mass_estimate(m,mstar,norbits=1,bootpar=-1):
+def mass_estimate(m,mstar,norbits=1,bootpar=-1,samples=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -248,6 +248,10 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1):
             mparr_all[i,:] = mparr
 
         return mpsini, mparr_all
+
+   # mass estimate for mcmc
+   # if len(np.array(samples).shape) > 0:
+   #     samples = sampler.chain[:, 200:, :].reshape((-1, ndim)) 
 
     else:
         return mpsini
@@ -283,7 +287,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
             m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*10) #per no longer than 10x range of survey 
         
         #limit Tp
-        m.lm_prob.p_limit(1+i*7, lower=orbel[1+i*7]-orbel[0+i*7]/4., upper=orbel[1+i*7]+orbel[0+i*7]/4.) #T0 within one period guess
+        m.lm_prob.p_limit(1+i*7, lower=orbel[1+i*7]-orbel[0+i*7]/2., upper=orbel[1+i*7]+orbel[0+i*7]/2.) #T0 within one period guess
 
         #fix/limit ecc
         if circ[i] == 1:
@@ -494,17 +498,17 @@ if __name__ == '__main__':
 
 
 #begin MCMC setup - following emcee line-fitting demo
-def lnprior(theta, fullpars, flt, pnames):
+def lnprior(theta, fullpars, flt, pnames, plo, phi):
     
-    #some pretty basic limits for flat priors
-    low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1e3, -1])
-    high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1e3, 1])
+    #some pretty basic limits for flat priors - I do this in setup_emcee
+    #low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1e3, -1])
+    #high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1e3, 1])
 
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
-    lfloat = low[flt.nonzero()]
-    hfloat = high[flt.nonzero()]
+    lfloat = plo[flt.nonzero()]
+    hfloat = phi[flt.nonzero()]
 
 
     if (theta > lfloat).all() and (theta < hfloat).all():
@@ -513,8 +517,8 @@ def lnprior(theta, fullpars, flt, pnames):
         return -np.inf
     
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames):
-    lp = lnprior(theta, fullpars, flt, pnames)
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi):
+    lp = lnprior(theta, fullpars, flt, pnames, plo, phi)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lnlike(theta, jdb, rv, srv, fullpars, flt)
@@ -529,7 +533,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt):
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0): 
+def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0, pfix=1): 
 
     bestpars = m.params
 
@@ -552,49 +556,96 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
     
     norbits = npars/7
 
-    ip = np.arange(norbits) #index for planets
-    if norbits > 1:
-        ip2 = np.arange(norbits-1)+1 #index for planets after 1st one
+#vectorizing loop
+#    ip = np.arange(norbits) #index for planets
+#    if norbits > 1:
+#        ip2 = np.arange(norbits-1)+1 #index for planets after 1st one
+
+    #these will hold reasonable limits on priors
+    plo = np.zeros(npars)
+    phi = np.zeros(npars)
 
     #separate the params being varied from the full list
-    flt = np.ones(npars) #all params float now, turn off individually
+    flt = np.ones(npars) #all params float now, turn off individually  
 
-    #force fix period for now
-    flt[0+ip*7] = 0
-    
-    if circ > 0:   
-        flt[2+ip*7] = 0  #fix ecc - this fixes all planets, BAD
-        if not tt[0] == 0:
-            flt[1+ip*7] = 0 #if tt known, fix tp - also all planets
-            flt[3+ip*7] = 0 #also fix omega - also all planets
+    #probably doesn't need to be a loop...
+    for i in range(norbits):
+        
+        #fix normal orbit params first...
+        
+        #fix/limit period:
+        if pfix[i] == 1:
+            flt[0+i*7] = 0
+        plo[0+i*7] = 0.1
+        phi[0+i*7] = (np.max(jdb)-np.min(jdb))*10
 
-    #want some testing that the output of LM is sensible!
-    #need to consider eccentric transiting planets...
+        #limit Tp
+        plo[1+i*7] = -3e6
+        phi[1+i*7] = 3e6
 
-    if norbits > 1:
-        flt[5+ip2*7] = 0 #always force fix all gammas except 1st
-        flt[6+ip2*7] = 0 #same for dvdt
-    
+        #fix/limit ecc
+        if circ[i] == 1:
+            flt[2+i*7] = 0
+        plo[2+i*7] = 0.0
+        phi[2+i*7] = 0.99
+
+        #limit omega
+        plo[3+i*7] = 0.0
+        phi[3+i*7] = 360.0
+
+        #limit K
+        plo[4+i*7] = 0.0
+        phi[4+i*7] = 1.0e5
+
+        #fix gamma except first
+        if i > 0:
+            flt[5+i*7] = 0
+        plo[5+i*7] = -1e6
+        phi[5+i*7] = 1e6
+
+        #optionally fix 1st trend, fix all after
+        if i == 0:              #use a different logic statement...
+            if trend == 0:
+                flt[6+i*7] = 0 
+        else:
+            flt[6+i*7] = 0 
+        plo[6+i*7] = -1e3
+        phi[6+i*7] = 1e3
+
+        #now consider known transits...
+        if not tt[i] == 0:
+            if circ[i] == 1:
+                flt[1+i*7] = 0
+                bestpars[1+i*7] = tt[i] #this is not necessary?
+                flt[3+i*7] = 0
+                bestpars[3+i*7] = 90.0
+            #else:
+                #tie omega to ecc
     #if curv = 1, flt[-1] = 1, but this already happens
+    
+    #want some testing that the output of LM is sensible!
+    
+    
+    
     print flt
     varpars = bestpars[flt.nonzero()]
     ndim = varpars.size
     pnames = np.copy(m.pnames)
     print 'MCMC params: ',pnames[flt.nonzero()] 
     
-    samples = run_emcee(targname, bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
+    samples = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
 
     return m, flt, samples
    # return bestpars, varpars, flt, pnames
 
 
-def run_emcee(targname, bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-2*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
@@ -603,8 +654,11 @@ def run_emcee(targname, bestpars, varpars, flt, jdb, rv, srv, pnames, ndim, nwal
     #This is 'burning in'
     samples = sampler.chain[:, 200:, :].reshape((-1, ndim))
 
-    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) #makes nice plots...
+    #make a nice triangle plot
+    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) 
     fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
     plt.close(fig)
 
     return sampler.chain
+
+
