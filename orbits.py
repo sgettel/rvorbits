@@ -43,7 +43,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     else:
         print targname
-        jdb, rv, srv, labels = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
+        jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
      
     #adjust values to be sensible
@@ -128,7 +128,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     if nboot > 0:
         bootpar, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit,pfix=pfix)
    
-        mpsini, mparr_all = mass_estimate(m,mstar,norbits=norbits,bootpar=bootpar)
+        mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpar)
        
         print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
 
@@ -137,9 +137,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #call MCMC    
     if nwalkers > 0:
 
-        m, flt, samples = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
-    
-        return m, flt, samples# bestpars, varpars, flt, pnames # 
+        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+        mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
+        #print output from mass_estimate for mc
+        return m, flt, chain, samples, allpars# bestpars, varpars, flt, pnames # 
     else:
         return
 
@@ -218,7 +219,7 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
     return
 
-def mass_estimate(m,mstar,norbits=1,bootpar=-1,samples=-1):
+def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -250,9 +251,14 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,samples=-1):
         return mpsini, mparr_all
 
    # mass estimate for mcmc
-   # if len(np.array(samples).shape) > 0:
-   #     samples = sampler.chain[:, 200:, :].reshape((-1, ndim)) 
+    if len(np.array(mcpar).shape) > 0:
+        mparr_mc = np.zeros((norbits,mcpar.shape[0]))
 
+        for i in ip:
+            fmarr = (1 - mcpar[:,2+i*7]**2)**(1.5)*mcpar[:,i*7+4]**3*(mcpar[:,i*7]*86400.0)/(2.0*np.pi*G)
+            mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
+            mparr_mc[i,:] = mparr
+        return mpsini, mparr_mc
     else:
         return mpsini
     
@@ -533,7 +539,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt):
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
-def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0, pfix=1): 
+def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
 
     bestpars = m.params
 
@@ -624,18 +630,27 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
     #if curv = 1, flt[-1] = 1, but this already happens
     
     #want some testing that the output of LM is sensible!
-    
-    
-    
+       
     print flt
-    varpars = bestpars[flt.nonzero()]
+    f = np.squeeze(flt.nonzero())
+    varpars = bestpars[f]
     ndim = varpars.size
     pnames = np.copy(m.pnames)
-    print 'MCMC params: ',pnames[flt.nonzero()] 
+    print 'MCMC params: ',pnames[f] 
     
-    samples = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
+  
+    #It takes a number of iterations to spread walkers throughout param space
+    #This is 'burning in'
+    samples = chain[:, nburn:, :].reshape((-1, ndim))
+    
+    #combine samples with best-fit values
+    allpars = ut.fan(bestpars,samples.shape[0])
+    
+    for i in range(ndim):
+        mcpars[:,f[i]] = samples[:,i]
 
-    return m, flt, samples
+    return m, flt, chain, samples, mcpars
    # return bestpars, varpars, flt, pnames
 
 
@@ -650,14 +665,10 @@ def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
 
-    #It takes a number of iterations to spread walkers throughout param space
-    #This is 'burning in'
-    samples = sampler.chain[:, 200:, :].reshape((-1, ndim))
-
-    #make a nice triangle plot
-    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) 
-    fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
-    plt.close(fig)
+#    #make a nice triangle plot - do this somewhere else!
+#    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) 
+#    fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
+#    plt.close(fig)
 
     return sampler.chain
 
