@@ -114,6 +114,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #display initial fit - want to show fixed params too
     m.print_soln()  #read this in detail
     
+    #TODO correct omega if needed!
+
     #mass estimate
     mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',str(mpsini)
@@ -155,7 +157,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
     #guesspars2 = np.copy(guesspars)
-    model_init = rv_drive(guesspars,tmod) # something wrong if trend
+    model_init = rv_drive(guesspars,tmod) 
     model_final = rv_drive(m.params,tmod)
     
     #unphased data
@@ -302,14 +304,10 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         if curv == 1:
             param_names.extend(['curv']) 
     
-    tie = np.zeros(norbits)
-    for in range(norbits):
-        if not tt[i] == 0 and circ[i] == 0:
-            tie[i] = 1
-
+    
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
-    m.set_func(rv_drive,param_names, args=[jdb] )
-#    m.set_func(rv_drive,param_names, args=(jdb,tie))
+#    m.set_func(rv_drive,param_names, args=[jdb] )
+    m.set_func(rv_drive,param_names, args=(jdb,circ,tt))
 
     #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
@@ -364,7 +362,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     #m.print_soln()
     return m
 
-def rv_drive(orbel, t):
+def rv_drive(orbel, t, circ=np.zeros(1), tt=np.zeros(1)):
     #From rv_drive.pro in RVLIN by JTW
 
     if orbel.size > 20:
@@ -399,16 +397,21 @@ def rv_drive(orbel, t):
                 ecc = 0.99
             if k < 0:
                 k = 1e-2
+
+         #if eccentric with known transit time, tie omega
+        if not tt[i] == 0 and circ[i] == 0:
+            thetatt = calc_true_anomaly(p, tp, ecc, tt[i])
+            om = (np.pi/2.0 - thetatt)*180.0/np.pi #in degrees
+
+            #this will break if om is way off...
+            if om < 0:
+                om += 360.
+            if om > 360.:
+                om -=360.
+
         
-        #calculate the approximate eccentric anomaly, E1, from the mean anomaly, M
-        M = 2.0*np.pi*( ((t-tp)/p) - np.floor((t-tp)/p) ) #phase in radians
-        
-        E1 = kepler(M,ecc) #returns a matrix, because fan
-        #E1 = E1[0,:]       #1 planet at a time
-        #calculate true anomaly
-        n1 = 1.0 + ecc
-        n2 = 1.0 - ecc
-        theta = 2.0*np.arctan(np.sqrt(n1/n2)*np.tan(E1/2.0))
+        theta = calc_true_anomaly(p, tp, ecc, t)
+
 
         phase0 = theta + om - np.pi/2.0
         under = np.squeeze(np.where(phase0 < -np.pi)) 
@@ -425,7 +428,17 @@ def rv_drive(orbel, t):
 
     return rv
 
+def calc_true_anomaly(p, tp, ecc, t):
+    #first calculate the approximate eccentric anomaly, E1, from the mean anomaly, M
+    M = 2.0*np.pi*( ((t-tp)/p) - np.floor((t-tp)/p) ) #phase in radians
+    E1 = kepler(M,ecc) 
 
+    #calculate true anomaly
+    n1 = 1.0 + ecc
+    n2 = 1.0 - ecc
+    theta = 2.0*np.arctan(np.sqrt(n1/n2)*np.tan(E1/2.0))
+
+    return theta 
 
 #Iteratively solve for E (anomoly) given M (mean anomoly) and e (eccentricity)
 #@profile
@@ -504,7 +517,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
     #based on the general method of bootpar.pro by SXW
     #Wow, this is slow! Make faster
 
-    bestfit = rv_drive(bestpar, jdb)
+    bestfit = rv_drive(bestpar, jdb, circ=circ, tt=tt)
     #print bestpar.size, bestpar.shape
     resid = rv - bestfit
 
