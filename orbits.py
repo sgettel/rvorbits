@@ -51,12 +51,9 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #    print 'truncating dates'
     tnorm = jdb - epoch #truncate
     rvnorm = rv - np.median(rv)
-    print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
+    #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
     
-  
-    #read Mstar
-    
-    #Mstar = 1.69
+
 
     #process offsets - very not implemented 
 
@@ -95,7 +92,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     for i in range(transit.size):  #do something more clever here...
         if not transit[i] == 0.0:
             transit[i] -= epoch 
-            print 'set transit time: ', transit
+            #print 'set transit time: ', transit
  
     if not guesspars[6] == 0: #only set for 1st planet
         trend = 1
@@ -140,7 +137,14 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, trend=trend, curv=curv, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
-        return m, flt, chain, samples, allpars# bestpars, varpars, flt, pnames # 
+        print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,curv=curv)
+
+        #make a nice triangle plot
+        fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=m.marams[flt.nonzero()]) 
+        fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
+        plt.close(fig)
+
+        return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
     else:
         return
 
@@ -213,8 +217,25 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
         print 'K: ', str(meanpar[i*7+4]),'+/-',str(sigpar[i*7+4])
         print 'gamma: ', str(meanpar[i*7+5]),'+/-',str(sigpar[i*7+5])
         print 'dvdt: ', str(meanpar[i*7+6]),'+/-',str(sigpar[i*7+6])
-        if curv == 1:
-            print 'curv: ',str(meanpar[i*7+7]),'+/-',str(sigpar[i*7+7]) #BAD, only true for 1 planet
+        if curv == 1 and i == 0:
+            print 'curv: ',str(meanpar[-1]),'+/-',str(sigpar[-1]) 
+        print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
+        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
+    return
+
+def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,curv=0):
+    
+    for i in range(norbits):
+        print '*****Planet ',str(i+1),' errors:*****'  
+        print 'Per: ', str(np.mean(mcpars[:,0+i*7])),'+/-',str(np.std(mcpars[0+i*7]))
+        print 'Tp: ', str(np.mean(mcpars[:,1+i*7])),'+/-',str(np.std(mcpars[1+i*7]))
+        print 'Ecc: ', str(np.mean(mcpars[:,2+i*7])),'+/-',str(np.std(mcpars[2+i*7]))
+        print 'Om: ', str(np.mean(mcpars[:,3+i*7])),'+/-',str(np.std(mcpars[3+i*7]))
+        print 'K: ', str(np.mean(mcpars[:,4+i*7])),'+/-',str(np.std(mcpars[4+i*7]))
+        print 'gamma: ', str(np.mean(mcpars[:,5+i*7])),'+/-',str(np.std(mcpars[5+i*7]))
+        print 'dvdt: ', str(np.mean(mcpars[:,6+i*7])),'+/-',str(np.std(mcpars[6+i*7]))
+        if curv == 1 and i == 0:
+            print 'curv: ',str(np.mean(mcpars[:, -1])),'+/-',str(np.std(mcpars[-1]))
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
     return
@@ -631,7 +652,7 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
     
     #want some testing that the output of LM is sensible!
        
-    print flt
+    
     f = np.squeeze(flt.nonzero())
     varpars = bestpars[f]
     ndim = varpars.size
@@ -645,7 +666,7 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
     samples = chain[:, nburn:, :].reshape((-1, ndim))
     
     #combine samples with best-fit values
-    allpars = ut.fan(bestpars,samples.shape[0])
+    mcpars = ut.fan(bestpars,samples.shape[0])
     
     for i in range(ndim):
         mcpars[:,f[i]] = samples[:,i]
@@ -664,11 +685,6 @@ def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, 
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
-
-#    #make a nice triangle plot - do this somewhere else!
-#    fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=bestpars[flt.nonzero()]) 
-#    fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
-#    plt.close(fig)
 
     return sampler.chain
 
