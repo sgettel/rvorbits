@@ -140,7 +140,9 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,curv=curv)
 
         #make a nice triangle plot
-        fig = triangle.corner(samples, labels=pnames[flt.nonzero()], truths=m.marams[flt.nonzero()]) 
+        pnames = np.copy(m.pnames)
+        f = np.squeeze(flt.nonzero())
+        fig = triangle.corner(samples, labels=pnames[f], truths=m.params[f]) 
         fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
         plt.close(fig)
 
@@ -292,6 +294,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         nsrv = srv
 
     norbits = orbel.size/7
+    
     ip = np.arange(norbits)
 
     if param_names == 0: #do something more clever here later
@@ -299,8 +302,14 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         if curv == 1:
             param_names.extend(['curv']) 
     
+    tie = np.zeros(norbits)
+    for in range(norbits):
+        if not tt[i] == 0 and circ[i] == 0:
+            tie[i] = 1
+
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
     m.set_func(rv_drive,param_names, args=[jdb] )
+#    m.set_func(rv_drive,param_names, args=(jdb,tie))
 
     #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
@@ -311,7 +320,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         if pfix[i] == 1:
             m.lm_prob.p_value(0+i*7, orbel[0+i*7], fixed=True)
         else:
-            m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*10) #per no longer than 10x range of survey 
+            m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*20) #per no longer than 10x range of survey 
         
         #limit Tp
         m.lm_prob.p_limit(1+i*7, lower=orbel[1+i*7]-orbel[0+i*7]/2., upper=orbel[1+i*7]+orbel[0+i*7]/2.) #T0 within one period guess
@@ -345,7 +354,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
                 m.lm_prob.p_value(1+i*7, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*7, 90.0, fixed=True)
             #else:
-                #tie omega to ecc
+            #    #placeholder value, omega calculated in rv_drive
+            #    m.lm_prob.p_value(3+i*7, 0.0, fixed=True) 
 
     #if orbel.size % 7 == 1:
             #set some reasonable limits?
@@ -604,7 +614,7 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, trend=0, curv=0
         if pfix[i] == 1:
             flt[0+i*7] = 0
         plo[0+i*7] = 0.1
-        phi[0+i*7] = (np.max(jdb)-np.min(jdb))*10
+        phi[0+i*7] = (np.max(jdb)-np.min(jdb))*20
 
         #limit Tp
         plo[1+i*7] = -3e6
