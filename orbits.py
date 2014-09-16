@@ -286,6 +286,9 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
         return mpsini, mparr_mc
     else:
         return mpsini
+
+def tie_omega(orbel):
+    
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0, tt=np.zeros(1),epoch=2.455e6,pfix=1):
@@ -306,8 +309,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     
     
     m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
-#    m.set_func(rv_drive,param_names, args=[jdb] )
-    m.set_func(rv_drive,param_names, args=(jdb,circ,tt))
+    m.set_func(rv_drive,param_names, args=[jdb] )
+    
 
     #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
@@ -352,8 +355,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
                 m.lm_prob.p_value(1+i*7, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*7, 90.0, fixed=True)
             #else:
-            #    #placeholder value, omega calculated in rv_drive
-            #    m.lm_prob.p_value(3+i*7, 0.0, fixed=True) 
+                m.lm_prob.p_tie(3+i*7, tie_omega) 
 
     #if orbel.size % 7 == 1:
             #set some reasonable limits?
@@ -362,7 +364,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     #m.print_soln()
     return m
 
-def rv_drive(orbel, t, circ=np.zeros(1), tt=np.zeros(1)):
+def rv_drive(orbel, t):
     #From rv_drive.pro in RVLIN by JTW
 
     if orbel.size > 20:
@@ -397,19 +399,7 @@ def rv_drive(orbel, t, circ=np.zeros(1), tt=np.zeros(1)):
                 ecc = 0.99
             if k < 0:
                 k = 1e-2
-
-         #if eccentric with known transit time, tie omega
-        if not tt[i] == 0 and circ[i] == 0:
-            thetatt = calc_true_anomaly(p, tp, ecc, tt[i])
-            om = (np.pi/2.0 - thetatt)*180.0/np.pi #in degrees
-
-            #this will break if om is way off...
-            if om < 0:
-                om += 360.
-            if om > 360.:
-                om -=360.
-
-        
+     
         theta = calc_true_anomaly(p, tp, ecc, t)
 
 
@@ -517,7 +507,7 @@ def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,trend=0,curv=
     #based on the general method of bootpar.pro by SXW
     #Wow, this is slow! Make faster
 
-    bestfit = rv_drive(bestpar, jdb, circ=circ, tt=tt)
+    bestfit = rv_drive(bestpar, jdb)
     #print bestpar.size, bestpar.shape
     resid = rv - bestfit
 
