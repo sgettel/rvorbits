@@ -116,7 +116,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     
     #display initial fit - want to show fixed params too
-    m.print_soln()  #read this in detail
+    m.print_soln()  
+    
     
     #TODO correct omega if needed!
 
@@ -133,9 +134,12 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
    
         mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpar)
        
-        print_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
+        print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
 
         #return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+    else:
+        bootpar = -1
+        mparr_all = -1
 
     #call MCMC    
     if nwalkers > 0:
@@ -152,9 +156,9 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
         plt.close(fig)
 
-        return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
-    else:
-        return
+        #return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
+    print_full_soln(m, targname, mpsini)
+    return
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
    
@@ -214,10 +218,48 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
 #    print targname
 #    plot histograms!
 
-def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
+def print_full_soln(m,targname,mpsini, bootpar=-1, mparr_all=-1):
+    
+    norbits = m.params.size/7
+    
+    f = open('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_orbit.dat','w')
+    for i in range(norbits):
+        f.write('*****Planet '+str(i+1)+' Solution:***** \n')
+        f.write('Per: '+str(m.params[0+i*7])+'\n')
+        f.write('Tp: '+str(m.params[1+i*7])+'\n')
+        f.write('ecc: '+str(m.params[2+i*7])+'\n')
+        f.write('om: '+str(m.params[3+i*7])+'\n')
+        f.write('K1: '+str(m.params[4+i*7])+'\n')
+        f.write('gamma: '+str(m.params[5+i*7])+'\n')
+        f.write('dvdt: '+str(m.params[6+i*7])+'\n')
+        if m.params.size % 7 == 1:
+            f.write('curv: '+str(m.params[-1])+'\n')
+        f.write('mp*sin(i): '+str(mpsini[i])+'\n')
+
+    if len(np.array(bootpar).shape) > 0: #print bootstrap errs
+        for i in range(norbits):
+            f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
+            f.write('Per: '+ str(np.mean(bootpars[:,0+i*7]))+'+/-'+str(np.std(bootpars[0+i*7]))+'\n')
+            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*7]))+'+/-'+str(np.std(bootpars[1+i*7]))+'\n')
+            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*7]))+'+/-'+str(np.std(bootpars[2+i*7]))+'\n')
+            f.write('om: '+ str(np.mean(bootpars[:,3+i*7]))+'+/-'+str(np.std(bootpars[3+i*7]))+'\n')
+            f.write('K1: '+ str(np.mean(bootpars[:,4+i*7]))+'+/-'+str(np.std(bootpars[4+i*7]))+'\n')
+            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*7]))+'+/-'+str(np.std(bootpars[5+i*7]))+'\n')
+            f.write('dvdt: '+ str(np.mean(bootpars[:,6+i*7]))+'+/-'+str(np.std(bootpars[6+i*7]))+'\n')
+            if m.params.size % 7 == 1 and i == 0:
+                f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
+            f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
+            f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'+'\n')
+
+    #if len(np.array(mcpar).shape) > 0: #print bootstrap errs
+
+    f.close()
+
+def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
     print mparr_all.shape
     for i in range(norbits):
-        print '*****Planet ',str(i+1),' errors:*****'
+        print '                                               '
+        print '*****Planet ',str(i+1),' Bootstrap Errors:*****'
         print 'Per: ', str(meanpar[i*7]),'+/-',str(sigpar[i*7])
         print 'Tp: ', str(meanpar[i*7+1]),'+/-',str(sigpar[i*7+1])
         print 'ec: ', str(meanpar[i*7+2]),'+/-',str(sigpar[i*7+2])
@@ -234,7 +276,8 @@ def print_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
 def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,curv=0):
     
     for i in range(norbits):
-        print '*****Planet ',str(i+1),' errors:*****'  
+        print '                                               '
+        print '*****Planet ',str(i+1),' MCMC Errors:*****'  
         print 'Per: ', str(np.mean(mcpars[:,0+i*7])),'+/-',str(np.std(mcpars[0+i*7]))
         print 'Tp: ', str(np.mean(mcpars[:,1+i*7])),'+/-',str(np.std(mcpars[1+i*7]))
         print 'Ecc: ', str(np.mean(mcpars[:,2+i*7])),'+/-',str(np.std(mcpars[2+i*7]))
