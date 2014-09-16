@@ -287,8 +287,11 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     else:
         return mpsini
 
-def tie_omega(orbel):
+#def tie_omega(orbel):
     
+
+#    return omega
+
     
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0, tt=np.zeros(1),epoch=2.455e6,pfix=1):
@@ -355,7 +358,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
                 m.lm_prob.p_value(1+i*7, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*7, 90.0, fixed=True)
             #else:
-                m.lm_prob.p_tie(3+i*7, tie_omega) 
+            #    m.lm_prob.p_value(1+i*7, tt[i], fixed=False) #is this right?
+            #    m.lm_prob.p_tie(3+i*7, tie_omega) 
 
     #if orbel.size % 7 == 1:
             #set some reasonable limits?
