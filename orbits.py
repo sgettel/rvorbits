@@ -130,7 +130,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     #call bootstrapping
     if nboot > 0:
-        bootpar, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit,pfix=pfix)
+        bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit,pfix=pfix)
    
         mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpar)
        
@@ -138,7 +138,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
     else:
-        bootpar = -1
+        bootpars = -1
         mparr_all = -1
 
     #call MCMC    
@@ -155,9 +155,14 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         fig = triangle.corner(samples, labels=pnames[f], truths=m.params[f]) 
         fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
         plt.close(fig)
+    else:
+        mcpars = -1
+        mparr_mc = -1
 
         #return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
-    print_full_soln(m, targname, mpsini)
+    write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc)
+
+
     return
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
@@ -218,12 +223,13 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/'):
 #    print targname
 #    plot histograms!
 
-def print_full_soln(m,targname,mpsini, bootpar=-1, mparr_all=-1):
+def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1):
     
     norbits = m.params.size/7
     
     f = open('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_orbit.dat','w')
     for i in range(norbits):
+        f.write('                                               ') 
         f.write('*****Planet '+str(i+1)+' Solution:***** \n')
         f.write('Per: '+str(m.params[0+i*7])+'\n')
         f.write('Tp: '+str(m.params[1+i*7])+'\n')
@@ -238,6 +244,7 @@ def print_full_soln(m,targname,mpsini, bootpar=-1, mparr_all=-1):
 
     if len(np.array(bootpar).shape) > 0: #print bootstrap errs
         for i in range(norbits):
+            f.write('                                               ')
             f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
             f.write('Per: '+ str(np.mean(bootpars[:,0+i*7]))+'+/-'+str(np.std(bootpars[0+i*7]))+'\n')
             f.write('Tp: '+ str(np.mean(bootpars[:,1+i*7]))+'+/-'+str(np.std(bootpars[1+i*7]))+'\n')
@@ -251,8 +258,21 @@ def print_full_soln(m,targname,mpsini, bootpar=-1, mparr_all=-1):
             f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'+'\n')
 
-    #if len(np.array(mcpar).shape) > 0: #print bootstrap errs
-
+    if len(np.array(mcpar).shape) > 0: #print bootstrap errs
+        for i in range(norbits):
+            f.write('                                               ')
+            f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
+            f.write('Per: '+ str(np.mean(mcpars[:,0+i*7]))+'+/-'+str(np.std(mcpars[:,0+i*7]))+'\n')
+            f.write('Tp: '+ str(np.mean(mcpars[:,1+i*7]))+'+/-'+str(np.std(mcpars[:,1+i*7]))+'\n')
+            f.write('ecc: '+ str(np.mean(mcpars[:,2+i*7]))+'+/-'+str(np.std(mcpars[:,2+i*7]))+'\n')
+            f.write('om: '+ str(np.mean(mcpars[:,3+i*7]))+'+/-'+str(np.std(mcpars[:,3+i*7]))+'\n')
+            f.write('K1: '+ str(np.mean(mcpars[:,4+i*7]))+'+/-'+str(np.std(mcpars[:,4+i*7]))+'\n')
+            f.write('gamma: '+ str(np.mean(mcpars[:,5+i*7]))+'+/-'+str(np.std(mcpars[:,5+i*7]))+'\n')
+            f.write('dvdt: '+ str(np.mean(mcpars[:,6+i*7]))+'+/-'+str(np.std(mcpars[:,6+i*7]))+'\n')
+            if m.params.size % 7 == 1 and i == 0:
+                f.write('curv: '+ str(np.mean(mcpars[:,-1]))+'+/-'+str(np.std(mcpars[:,-1]))+'\n')
+            f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
+            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100),'%'+'\n') 
     f.close()
 
 def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
@@ -334,12 +354,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     else:
         return mpsini
 
-#def tie_omega(orbel):
-    
-
-#    return omega
-
-    
+   
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0, tt=np.zeros(1),epoch=2.455e6,pfix=1):
     
@@ -414,6 +429,14 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     m.solve(orbel)
     #m.print_soln()
     return m
+
+#OO? magic from Peter...
+#def tie_omega_function(tt, i):
+
+#    def calculate_omega(orbel):
+
+        #call 
+
 
 def rv_drive(orbel, t):
     #From rv_drive.pro in RVLIN by JTW
