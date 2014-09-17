@@ -84,11 +84,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0, 0.0]) #K00273
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0, 0.0])#, 0.0]) #K00273
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -128,7 +128,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
    
         mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
        
-        print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
+        print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,npoly=npoly)
 
         #return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
     else:
@@ -141,7 +141,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
-        print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,curv=curv)
+        print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
 
         #make a nice triangle plot
         pnames = np.copy(m.pnames)
@@ -154,7 +154,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mparr_mc = -1
 
         #return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
-    write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc)
+    write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly)
 
 
     return
@@ -210,7 +210,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     rvt = rv_drive(parst,jdb,norbits,npoly)   
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,npoly),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0),'r.')
     #plt.plot((tmod - guess))
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
@@ -219,44 +219,49 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
 #    print targname
 #    plot histograms!
 
-def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1):
+def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0):
     
-    norbits = m.params.size/7
+    poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
     
     f = open('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_orbit.dat','w')
     for i in range(norbits):
-        f.write('                                               ') 
+        f.write('                                               \n') 
         f.write('*****Planet '+str(i+1)+' Solution:***** \n')
-        f.write('Per: '+str(m.params[0+i*7])+'\n')
-        f.write('Tp: '+str(m.params[1+i*7])+'\n')
-        f.write('ecc: '+str(m.params[2+i*7])+'\n')
-        f.write('om: '+str(m.params[3+i*7])+'\n')
-        f.write('K1: '+str(m.params[4+i*7])+'\n')
-        f.write('gamma: '+str(m.params[5+i*7])+'\n')
-        f.write('dvdt: '+str(m.params[6+i*7])+'\n')
-        if m.params.size % 7 == 1:
-            f.write('curv: '+str(m.params[-1])+'\n')
+        f.write('Per: '+str(m.params[0+i*6])+'\n')
+        f.write('Tp: '+str(m.params[1+i*6])+'\n')
+        f.write('ecc: '+str(m.params[2+i*6])+'\n')
+        f.write('om: '+str(m.params[3+i*6])+'\n')
+        f.write('K1: '+str(m.params[4+i*6])+'\n')
+        f.write('gamma: '+str(m.params[5+i*6])+'\n')
+
         f.write('mp*sin(i): '+str(mpsini[i])+'\n')
+    
+    for i in range(npoly):
+        f.write(str(poly_names[i])+str(m.params[i+norbits*6]) +'\n')
+
 
     if len(np.array(bootpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
-            f.write('                                               ')
+            f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
-            f.write('Per: '+ str(np.mean(bootpars[:,0+i*7]))+'+/-'+str(np.std(bootpars[0+i*7]))+'\n')
-            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*7]))+'+/-'+str(np.std(bootpars[1+i*7]))+'\n')
-            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*7]))+'+/-'+str(np.std(bootpars[2+i*7]))+'\n')
-            f.write('om: '+ str(np.mean(bootpars[:,3+i*7]))+'+/-'+str(np.std(bootpars[3+i*7]))+'\n')
-            f.write('K1: '+ str(np.mean(bootpars[:,4+i*7]))+'+/-'+str(np.std(bootpars[4+i*7]))+'\n')
-            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*7]))+'+/-'+str(np.std(bootpars[5+i*7]))+'\n')
-            f.write('dvdt: '+ str(np.mean(bootpars[:,6+i*7]))+'+/-'+str(np.std(bootpars[6+i*7]))+'\n')
-            if m.params.size % 7 == 1 and i == 0:
-                f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
+            f.write('Per: '+ str(np.mean(bootpars[:,0+i*6]))+'+/-'+str(np.std(bootpars[0+i*6]))+'\n')
+            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*6]))+'+/-'+str(np.std(bootpars[1+i*6]))+'\n')
+            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*6]))+'+/-'+str(np.std(bootpars[2+i*6]))+'\n')
+            f.write('om: '+ str(np.mean(bootpars[:,3+i*6]))+'+/-'+str(np.std(bootpars[3+i*6]))+'\n')
+            f.write('K1: '+ str(np.mean(bootpars[:,4+i*6]))+'+/-'+str(np.std(bootpars[4+i*6]))+'\n')
+            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*6]))+'+/-'+str(np.std(bootpars[5+i*6]))+'\n')
+#            f.write('dvdt: '+ str(np.mean(bootpars[:,6+i*7]))+'+/-'+str(np.std(bootpars[6+i*7]))+'\n')
+#            if m.params.size % 7 == 1 and i == 0:
+#                f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
             f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100)+'%'+'\n')
 
+        #for i in range(npoly):
+
+
     if len(np.array(mcpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
-            f.write('                                               ')
+            f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
             f.write('Per: '+ str(np.mean(mcpars[:,0+i*7]))+'+/-'+str(np.std(mcpars[:,0+i*7]))+'\n')
             f.write('Tp: '+ str(np.mean(mcpars[:,1+i*7]))+'+/-'+str(np.std(mcpars[:,1+i*7]))+'\n')
@@ -646,19 +651,19 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
         return -np.inf
     
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi):
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly):
     lp = lnprior(theta, fullpars, flt, pnames, plo, phi)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt)
+    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly)
 
-def lnlike(theta, jdb, rv, srv, fullpars, flt):
+def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly):
     
    
     newpars = np.copy(fullpars)
     newpars[flt.nonzero()] = theta
     
-    model = rv_drive(newpars, jdb)
+    model = rv_drive(newpars, jdb, norbit, npoly)
     
     return -0.5*np.sum((rv - model)**2/srv**2) #chisq
 
@@ -763,7 +768,7 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
     pnames = np.copy(m.pnames)
     print 'MCMC params: ',pnames[f] 
     
-    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly)
   
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -779,13 +784,13 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
    # return bestpars, varpars, flt, pnames
 
 
-def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-2*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
