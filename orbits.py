@@ -82,7 +82,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 500.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 562.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -119,8 +119,6 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     m.print_soln()  
     
     
-    #TODO correct omega if needed!
-
     #mass estimate
     mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',str(mpsini)
@@ -132,7 +130,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     if nboot > 0:
         bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,trend=trend,curv=curv,tt=transit,pfix=pfix)
    
-        mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpar)
+        mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
        
         print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,curv=curv)
 
@@ -242,7 +240,7 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             f.write('curv: '+str(m.params[-1])+'\n')
         f.write('mp*sin(i): '+str(mpsini[i])+'\n')
 
-    if len(np.array(bootpar).shape) > 0: #print bootstrap errs
+    if len(np.array(bootpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
             f.write('                                               ')
             f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
@@ -256,9 +254,9 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             if m.params.size % 7 == 1 and i == 0:
                 f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
             f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
-            f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'+'\n')
+            f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100)+'%'+'\n')
 
-    if len(np.array(mcpar).shape) > 0: #print bootstrap errs
+    if len(np.array(mcpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
             f.write('                                               ')
             f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
@@ -298,15 +296,15 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,curv=0):
     for i in range(norbits):
         print '                                               '
         print '*****Planet ',str(i+1),' MCMC Errors:*****'  
-        print 'Per: ', str(np.mean(mcpars[:,0+i*7])),'+/-',str(np.std(mcpars[0+i*7]))
-        print 'Tp: ', str(np.mean(mcpars[:,1+i*7])),'+/-',str(np.std(mcpars[1+i*7]))
-        print 'Ecc: ', str(np.mean(mcpars[:,2+i*7])),'+/-',str(np.std(mcpars[2+i*7]))
-        print 'Om: ', str(np.mean(mcpars[:,3+i*7])),'+/-',str(np.std(mcpars[3+i*7]))
-        print 'K: ', str(np.mean(mcpars[:,4+i*7])),'+/-',str(np.std(mcpars[4+i*7]))
-        print 'gamma: ', str(np.mean(mcpars[:,5+i*7])),'+/-',str(np.std(mcpars[5+i*7]))
-        print 'dvdt: ', str(np.mean(mcpars[:,6+i*7])),'+/-',str(np.std(mcpars[6+i*7]))
+        print 'Per: ', str(np.mean(mcpars[:,0+i*7])),'+/-',str(np.std(mcpars[:,0+i*7]))
+        print 'Tp: ', str(np.mean(mcpars[:,1+i*7])),'+/-',str(np.std(mcpars[:,1+i*7]))
+        print 'Ecc: ', str(np.mean(mcpars[:,2+i*7])),'+/-',str(np.std(mcpars[:,2+i*7]))
+        print 'Om: ', str(np.mean(mcpars[:,3+i*7])),'+/-',str(np.std(mcpars[:,3+i*7]))
+        print 'K: ', str(np.mean(mcpars[:,4+i*7])),'+/-',str(np.std(mcpars[:,4+i*7]))
+        print 'gamma: ', str(np.mean(mcpars[:,5+i*7])),'+/-',str(np.std(mcpars[:,5+i*7]))
+        print 'dvdt: ', str(np.mean(mcpars[:,6+i*7])),'+/-',str(np.std(mcpars[:,6+i*7]))
         if curv == 1 and i == 0:
-            print 'curv: ',str(np.mean(mcpars[:, -1])),'+/-',str(np.std(mcpars[-1]))
+            print 'curv: ',str(np.mean(mcpars[:, -1])),'+/-',str(np.std(mcpars[:,-1]))
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
     return
@@ -419,9 +417,9 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
             if circ[i] == 1:  #by convention tt=tp & omega=90
                 m.lm_prob.p_value(1+i*7, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*7, 90.0, fixed=True)
-            #else:
-            #    m.lm_prob.p_value(1+i*7, tt[i], fixed=False) #is this right?
-            #    m.lm_prob.p_tie(3+i*7, tie_omega) 
+            else:
+                tiefunc = tie_omega_function(tt, i) #how does this know what orbel is???
+                m.lm_prob.p_tie(3+i*7, tiefunc)
 
     #if orbel.size % 7 == 1:
             #set some reasonable limits?
@@ -431,12 +429,25 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
     return m
 
 #OO? magic from Peter...
-#def tie_omega_function(tt, i):
+def tie_omega_function(tt, i):
 
-#    def calculate_omega(orbel):
+    def calculate_omega(orbel):
 
-        #call 
+        p = orbel[0+i*7]
+        tp = orbel[1+i*7]
+        ecc = orbel[2+i*7]
 
+        theta_tt = calc_true_anomaly(p, tp, ecc, tt[i]) #in radians
+        omega = (np.pi/2.0 - theta_tt)*180.0/np.pi
+         
+        if omega < 0:     #do something more clever
+            omega += 360.0
+        if omega > 360.0:
+            omega -= 360.0
+        
+        return omega
+
+    return calculate_omega
 
 def rv_drive(orbel, t):
     #From rv_drive.pro in RVLIN by JTW
