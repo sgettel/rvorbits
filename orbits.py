@@ -115,7 +115,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
     
     
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
-    m0 = np.copy(m)
+    
 
     
     #display initial fit - want to show fixed params too
@@ -144,16 +144,17 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
 
     #call MCMC    
     if nwalkers > 0:
-
-        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+#        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
         print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
 
         #make a nice triangle plot
-        pnames = np.copy(m.pnames)
+        
+        print pnames
         f = np.squeeze(flt.nonzero())
-        fig = triangle.corner(samples, labels=pnames[f], truths=m.params[f]) 
+        fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
         fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
         plt.close(fig)
     else:
@@ -164,7 +165,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
     write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly)
 
 
-    return
+    return m
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0):
    
@@ -312,6 +313,7 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0):
     
     for i in range(npoly):
         print str(poly_names[i]), str(np.mean(mcpars[:,i+norbits*6])),'+/-',str(np.std(mcpars[:,i+norbits*6]))
+    print 'jitter: ', str(np.mean(mcpars[:,-1])),'+/-',str(np.std(mcpars[:,-1]))
     return
 
 def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
@@ -627,7 +629,7 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     #some pretty basic limits for flat priors - I do this in setup_emcee
     #low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1e3, -1])
     #high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1e3, 1])
-
+    #print theta
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
@@ -635,7 +637,7 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     hfloat = phi[flt.nonzero()]
 
 
-    if (theta > lfloat).all() and (theta < hfloat).all():
+    if (theta >= lfloat).all() and (theta < hfloat).all():
         return 0.0
     else:
         return -np.inf
@@ -649,19 +651,20 @@ def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly):
 
 def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly):
     
-   
     newpars = np.copy(fullpars)
     newpars[flt.nonzero()] = theta
-    
+    #print newpars
     model = rv_drive(newpars, jdb, norbit, npoly)
-    
-    return -0.5*np.sum((rv - model)**2/srv**2) #chisq
+    nsrv = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
 
-def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
+    return -0.5*np.sum((rv - model)**2/nsrv**2) #chisq
 
-    bestpars = m.params
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
 
-    
+    bestpars = np.copy(m.params)
+    bestpars = np.append(bestpars,0.5) #add placeholder for jitter
+    pnames = np.copy(m.pnames)
+    pnames = np.append(pnames,'jitter')
 
     #p = orbel[0+i*6]
     #tp = orbel[1+i*6]
@@ -669,10 +672,19 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
     #om = orbel[3+i*6] *np.pi/180. #degrees to radians
     #k = orbel[4+i*6]
     #gamma = orbel[5+i*6]
-    
+    #dvdt = orbel[0+norbits*6] - optional polynomial fit
+    #quad = orbel[1+norbits*6]
+    #cubic = orbel[2+norbits*6]
+    #quart = orbel[3+norbits*6]
+    #jitter = orbel[-1]
+
     npars = bestpars.size
-    
-   
+
+    if jitter > 0:
+        print 'removing ',str(jitter),' m/s fixed jitter'
+        srv = np.sqrt(srv_in**2 - jitter**2)
+    else:
+        srv = srv_in
 
 #vectorizing loop
 #    ip = np.arange(norbits) #index for planets
@@ -745,16 +757,20 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
         plo[i+norbits*6] = -1e6
         phi[i+norbits*6] = 1e6
 
-   
+    #limit jitter
+    plo[-1] = 0.0
+    phi[-1] = 2.0
+
     #want some testing that the output of LM is sensible!
        
     
     f = np.squeeze(flt.nonzero())
     varpars = bestpars[f]
     ndim = varpars.size
-    pnames = np.copy(m.pnames)
-    print 'MCMC params: ',pnames[f] 
     
+    print 'MCMC params: ',pnames[f] 
+   
+
     chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly)
   
     #It takes a number of iterations to spread walkers throughout param space
@@ -767,8 +783,8 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
     for i in range(ndim):
         mcpars[:,f[i]] = samples[:,i]
 
-    return m, flt, chain, samples, mcpars
-   # return bestpars, varpars, flt, pnames
+    #return m, flt, chain, samples, mcpars
+    return bestpars, pnames, flt, samples, mcpars
 
 
 def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0):
