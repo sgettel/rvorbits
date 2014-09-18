@@ -32,7 +32,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
-    print pfix
+    
 
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
     	home = '/Users/Sara/'
@@ -78,11 +78,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        #guesspars = np.array([10.57377, 2455008.066, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0]) #K00273
+        guesspars = np.array([10.5737769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.0]) #K00273
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 562.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 0.0, 562.0, 2455008.066, 0.0, 90.0, 100.0, 0.0, 0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -270,7 +270,7 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             if m.params.size % 7 == 1 and i == 0:
                 f.write('curv: '+ str(np.mean(mcpars[:,-1]))+'+/-'+str(np.std(mcpars[:,-1]))+'\n')
             f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
-            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100),'%'+'\n') 
+            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
     f.close()
 
 def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,curv=0):
@@ -362,7 +362,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,trend=0,circ=0,curv=0,
         nsrv = srv
 
     norbits = orbel.size/7
-    
+    #print norbits
     ip = np.arange(norbits)
 
     if param_names == 0: #do something more clever here later
