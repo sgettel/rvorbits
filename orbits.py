@@ -225,7 +225,7 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
     
     for i in range(npoly):
         f.write(str(poly_names[i])+str(m.params[i+norbits*6]) +'\n')
-
+    f.write(str('r chi sq: ')+str(m.rchisq)+'\n')
 
     if len(np.array(bootpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
@@ -777,11 +777,13 @@ def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, 
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
-    pos = [varpars + 1e-2*varpars*np.random.randn(ndim) for i in range(nwalkers)]
+    pos = [varpars + 1e-3*varpars*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
+    print("Mean acceptance fraction: {0:.3f}"
+                .format(np.mean(sampler.acceptance_fraction)))
 
     return sampler.chain
 
