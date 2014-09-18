@@ -4,7 +4,7 @@
 # Branch nterms
 #
 
-#from __future__ import print_function #interface Python 2/3, need this?
+
 import emcee
 import socket
 import triangle
@@ -16,13 +16,12 @@ from pwkit import lsqmdl
 
 #
 # TO DO:
-# - print output to file
+# - jitter term
 # - histogram plots
 # - fix TT for eccentric orbits
-# - multiple planets
 # - read orbit params from somewhere
 # - add offset terms
-# - MCMC
+# - test MCMC
 
 
 #Given a target name, do everything!
@@ -84,7 +83,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
         transit = np.array([2455008.066,0.0]) 
         mstar = 1.07
         #2 planets...
@@ -244,12 +243,12 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
         for i in range(norbits):
             f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
-            f.write('Per: '+ str(np.mean(bootpars[:,0+i*6]))+'+/-'+str(np.std(bootpars[0+i*6]))+'\n')
-            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*6]))+'+/-'+str(np.std(bootpars[1+i*6]))+'\n')
-            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*6]))+'+/-'+str(np.std(bootpars[2+i*6]))+'\n')
-            f.write('om: '+ str(np.mean(bootpars[:,3+i*6]))+'+/-'+str(np.std(bootpars[3+i*6]))+'\n')
-            f.write('K1: '+ str(np.mean(bootpars[:,4+i*6]))+'+/-'+str(np.std(bootpars[4+i*6]))+'\n')
-            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*6]))+'+/-'+str(np.std(bootpars[5+i*6]))+'\n')
+            f.write('Per: '+ str(np.mean(bootpars[:,0+i*6]))+'+/-'+str(np.std(bootpars[:,0+i*6]))+'\n')
+            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*6]))+'+/-'+str(np.std(bootpars[:,1+i*6]))+'\n')
+            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*6]))+'+/-'+str(np.std(bootpars[:,2+i*6]))+'\n')
+            f.write('om: '+ str(np.mean(bootpars[:,3+i*6]))+'+/-'+str(np.std(bootpars[:,3+i*6]))+'\n')
+            f.write('K1: '+ str(np.mean(bootpars[:,4+i*6]))+'+/-'+str(np.std(bootpars[:,4+i*6]))+'\n')
+            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*6]))+'+/-'+str(np.std(bootpars[:,5+i*6]))+'\n')
 #            f.write('dvdt: '+ str(np.mean(bootpars[:,6+i*7]))+'+/-'+str(np.std(bootpars[6+i*7]))+'\n')
 #            if m.params.size % 7 == 1 and i == 0:
 #                f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
@@ -373,7 +372,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
     else:
         nsrv = srv
 
-       
+    
     ip = np.arange(norbits)
 
     if param_names == 0: #do something more clever here later
@@ -426,6 +425,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
 
     #limit polynomial terms
     for i in range(npoly):
+        
         m.lm_prob.p_limit(i+norbits*6, lower=-1e6, upper=1e6) #dvdt and higher
 
 
@@ -509,7 +509,7 @@ def rv_drive(orbel, t, norbits, npoly):
 
     #now add polynomial
     for i in range(npoly):
-        rv = rv + orbel[i+norbits*6]*(t - epoch)**i
+        rv = rv + orbel[i+norbits*6]*(t - epoch)**(i+1)
 
     return rv
 
@@ -731,8 +731,8 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
         #fix gamma except first
         if i > 0:
             flt[5+i*6] = 0
-        plo[5+i*6] = -1e6
-        phi[5+i*6] = 1e6
+        plo[5+i*6] = -1e8
+        phi[5+i*6] = 1e8
 
 #        #optionally fix 1st trend, fix all after
 #        if i == 0:              #use a different logic statement...
