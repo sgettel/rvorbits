@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch nterms
+# Branch master
 #
 
 
@@ -17,6 +17,7 @@ from pwkit import lsqmdl
 #
 # TO DO:
 # - jitter term
+# - plot trend if there is one
 # - histogram plots
 # - fix TT for eccentric orbits
 # - read orbit params from somewhere
@@ -24,11 +25,11 @@ from pwkit import lsqmdl
 # - test MCMC
 
 
-#Given a target name, do everything!
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
+#Given a target name, do everything! Eventually.
+def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
 
     if npoly > 4:
-        print 'Nope, you get a quartic!'
+        print 'Must have <= 4th order polynomial'
 
 
     transit = np.zeros(1)
@@ -59,7 +60,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     tnorm = jdb - epoch #truncate
     rvnorm = rv - np.median(rv)
     #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
-    
+    print np.min(tnorm),np.max(tnorm)
 
 
     #process offsets - very not implemented 
@@ -84,7 +85,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     if targname == 'K00273':
         guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
-        transit = np.array([2455008.066,0.0]) 
+        transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
@@ -167,10 +168,16 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     model_init = rv_drive(guesspars,tmod,norbits,npoly) 
     model_final = rv_drive(m.params,tmod,norbits,npoly)
     
+    if npoly > 0:
+        parst =  np.copy(m.params)
+        parst[4] = 0.0
+        poly = rv_drive(parst,tmod,norbits,npoly)
+
     #unphased data
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
+    plt.plot(tmod,poly,'g-')
     #plt.plot(tmod,model_init,'g-')
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
@@ -178,26 +185,6 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     #phase at first period  - LEFT OFF HERE
     #norbits = m.params.size/7
 
-#    if norbits == 1:
-#        pars = np.copy(m.params)  #for model
-#        pars[6] = 0 #remove trend
-#        if pars.size % 7 == 1: #remove curve if it is used
-#            pars[-1] = 0
-#        parst = np.copy(m.params) #for obs
-#        parst[4] = 0.0 #trend only
-#        parst[5] = 0.0
-#        phase = (jdb - pars[1])/pars[0] % 1.0
-        
-#        rvt = rv_drive(parst,jdb)   
-#    #print rvt[0:10]
-#        plt.figure(2)
-#        plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-#        plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod),'r.')
-#    #plt.plot((tmod - guess))
-#        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
-#        plt.close(2)
-
-#    else:
 
     #phase at 1st period
     pars = m.params[0:6]  #for model 
@@ -366,7 +353,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.456e6,pfix=1,norbits=1):
     
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
