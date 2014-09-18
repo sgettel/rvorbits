@@ -62,6 +62,12 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
     #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
     print np.min(tnorm),np.max(tnorm)
 
+    if jitter > 0.0: 
+        nsrv = np.sqrt(srv**2 + jitter**2)
+        print 'Adding ',str(jitter),' m/s fixed jitter'
+    else:
+        nsrv = srv
+
 
     #process offsets - very not implemented 
 
@@ -108,7 +114,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
 
     
     
-    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, srv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
     m0 = np.copy(m)
 
     
@@ -121,11 +127,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,tnorm,rvnorm,srv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly)
+    plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly)
     
     #call bootstrapping
     if nboot > 0:
-        bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, srv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
+        bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, nsrv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
    
         mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
        
@@ -139,7 +145,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
     #call MCMC    
     if nwalkers > 0:
 
-        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, srv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
         print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
@@ -355,11 +361,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.456e6,pfix=1,norbits=1):
     
-    if jitter > 0.0: #this should happen in rvfit_lsqmdl
-        nsrv = np.sqrt(srv**2 + jitter**2)
-    else:
-        nsrv = srv
-
+    
 
     ip = np.arange(norbits)
 
@@ -369,7 +371,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         param_names.extend(poly_names[:npoly]) 
     
     
-    m = lsqmdl.Model(None, rv, 1./nsrv) #m is a class
+    m = lsqmdl.Model(None, rv, 1./srv) #m is a class
     #m.set_func(rv_drive,param_names, args=[jdb] )
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly) )
 
@@ -659,10 +661,7 @@ def setup_emcee(targname, m, jdb, rv, srv, nwalkers=200, circ=0, npoly=0, norbit
 
     bestpars = m.params
 
-    if jitter > 0.0: #this should happen in rvfit_lsqmdl
-        nsrv = np.sqrt(srv**2 + jitter**2)
-    else:
-        nsrv = srv
+    
 
     #p = orbel[0+i*6]
     #tp = orbel[1+i*6]
