@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch jitter
+# Branch master
 #
 
 
@@ -170,7 +170,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
-    #guesspars2 = np.copy(guesspars)
+    
     model_init = rv_drive(guesspars,tmod,norbits,npoly) 
     model_final = rv_drive(m.params,tmod,norbits,npoly)
     
@@ -187,9 +187,6 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     #plt.plot(tmod,model_init,'g-')
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
-
-    #phase at first period  - LEFT OFF HERE
-    #norbits = m.params.size/7
 
 
     #phase at 1st period
@@ -243,14 +240,12 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             f.write('om: '+ str(np.mean(bootpars[:,3+i*6]))+'+/-'+str(np.std(bootpars[:,3+i*6]))+'\n')
             f.write('K1: '+ str(np.mean(bootpars[:,4+i*6]))+'+/-'+str(np.std(bootpars[:,4+i*6]))+'\n')
             f.write('gamma: '+ str(np.mean(bootpars[:,5+i*6]))+'+/-'+str(np.std(bootpars[:,5+i*6]))+'\n')
-#            f.write('dvdt: '+ str(np.mean(bootpars[:,6+i*7]))+'+/-'+str(np.std(bootpars[6+i*7]))+'\n')
-#            if m.params.size % 7 == 1 and i == 0:
-#                f.write('curv: '+str(np.mean(bootpars[:,-1]))+'+/-'+str(np.std(bootpars[-1]))+'\n')
+
             f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100)+'%'+'\n')
 
-        #for i in range(npoly):
-
+        for i in range(npoly):
+            f.write(str(poly_names[i])+str(np.mean(bootpars[:,i+norbits*6]))+'+/-'+str(np.std(bootpars[:,i+norbits*6])) +'\n') 
 
     if len(np.array(mcpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
@@ -262,9 +257,10 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             f.write('om: '+ str(np.mean(mcpars[:,3+i*7]))+'+/-'+str(np.std(mcpars[:,3+i*7]))+'\n')
             f.write('K1: '+ str(np.mean(mcpars[:,4+i*7]))+'+/-'+str(np.std(mcpars[:,4+i*7]))+'\n')
             f.write('gamma: '+ str(np.mean(mcpars[:,5+i*7]))+'+/-'+str(np.std(mcpars[:,5+i*7]))+'\n')
-            f.write('dvdt: '+ str(np.mean(mcpars[:,6+i*7]))+'+/-'+str(np.std(mcpars[:,6+i*7]))+'\n')
-            if m.params.size % 7 == 1 and i == 0:
-                f.write('curv: '+ str(np.mean(mcpars[:,-1]))+'+/-'+str(np.std(mcpars[:,-1]))+'\n')
+            
+            for i in range(npoly):
+                f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
+
             f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
     f.close()
@@ -282,10 +278,6 @@ def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,npoly=0):
         print 'K: ', str(meanpar[i*6+4]),'+/-',str(sigpar[i*6+4])
         print 'gamma: ', str(meanpar[i*6+5]),'+/-',str(sigpar[i*6+5])
 
-
-        #print 'dvdt: ', str(meanpar[i*6+6]),'+/-',str(sigpar[i*6+6])
-        #if curv == 1 and i == 0:
-        #    print 'curv: ',str(meanpar[-1]),'+/-',str(sigpar[-1]) 
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
 
@@ -304,9 +296,7 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0):
         print 'Om: ', str(np.mean(mcpars[:,3+i*6])),'+/-',str(np.std(mcpars[:,3+i*6]))
         print 'K: ', str(np.mean(mcpars[:,4+i*6])),'+/-',str(np.std(mcpars[:,4+i*6]))
         print 'gamma: ', str(np.mean(mcpars[:,5+i*6])),'+/-',str(np.std(mcpars[:,5+i*6]))
-#        print 'dvdt: ', str(np.mean(mcpars[:,6+i*6])),'+/-',str(np.std(mcpars[:,6+i*7]))
-#        if curv == 1 and i == 0:
-#            print 'curv: ',str(np.mean(mcpars[:, -1])),'+/-',str(np.std(mcpars[:,-1]))
+
         print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
         print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
     
