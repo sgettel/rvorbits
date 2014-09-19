@@ -32,7 +32,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
 
     transit = np.zeros(1)
-    
+    telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
     
@@ -47,7 +47,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         #demo!
         sfile = open(home+'Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
         jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
-
+        
+        #fake two telescopes
+        telvec = np.zeros_like(jdb)
+        telvec[0:10] = 1
+        rv[0:10] += 30.0 + np.random.randn(10) #noiser data with offset
     else:
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
@@ -68,7 +72,12 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         nsrv = srv
 
 
-    #process offsets - very not implemented 
+    #process offsets  
+    ntel = np.unique(telvec).size
+    if ntel > 1:
+        print 'Including ',ntel-1,' offset terms'
+        offset = np.zeros(ntel-1)
+
 
     #read/process parameter guesses from somewhere
     #p = orbel[0+i*6]
@@ -82,6 +91,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #quad = orbel[1+norbits*6]
     #cubic = orbel[2+norbits*6]
     #quart = orbel[3+norbits*6]
+
+    #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
+
+    #jitter - final term, MCMC only
 
     if targname == 'HD209458':
         guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01])#HD209458
@@ -109,11 +122,13 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         if not transit[i] == 0.0:
             transit[i] -= epoch 
             #print 'set transit time: ', transit
- 
 
+    #append offsets if needed
+    #if ntels > 1:
+    #    guesspars
     
     
-    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec,noffsets=noffsets)
     
 
     
@@ -350,18 +365,18 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,noffsets=0,telvec=-1):
     
     
-
     ip = np.arange(norbits)
 
     if param_names == 0: #do something more clever here later
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma']*norbits
         poly_names = ['dvdt','quad','cubic','quart']
         param_names.extend(poly_names[:npoly]) 
-    
-    
+        
+            
+
     m = lsqmdl.Model(None, rv, 1./srv) #m is a class
     #m.set_func(rv_drive,param_names, args=[jdb] )
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly) )
