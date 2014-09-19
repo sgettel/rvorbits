@@ -759,7 +759,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
     #limit jitter
     plo[-1] = 0.0
-    phi[-1] = 2.0
+    phi[-1] = 0.01
 
     #want some testing that the output of LM is sensible!
        
