@@ -19,14 +19,13 @@ from pwkit import lsqmdl
 # - jitter term
 # - plot trend if there is one
 # - histogram plots
-# - fix TT for eccentric orbits
 # - read orbit params from somewhere
 # - add offset terms
 # - test MCMC
 
 
 #Given a target name, do everything! Eventually.
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
+def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
 
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
@@ -84,7 +83,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.456e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
@@ -353,7 +352,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.456e6,pfix=1,norbits=1):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1):
     
     if jitter > 0.0: #this should happen in rvfit_lsqmdl
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -408,7 +407,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
                 m.lm_prob.p_value(1+i*6, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
             else:
-                tiefunc = tie_omega_function(tt, i) #how does this know what orbel is???
+                tiefunc = tie_omega_function(tt, i) #how does this know what orbel is?
                 m.lm_prob.p_tie(3+i*6, tiefunc)
 
     #limit polynomial terms
@@ -425,7 +424,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
 def tie_omega_function(tt, i):
 
     def calculate_omega(orbel):
-
+        
         p = orbel[0+i*6]
         tp = orbel[1+i*6]
         ecc = orbel[2+i*6]
