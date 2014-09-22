@@ -276,11 +276,11 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             f.write('K1: '+ str(np.mean(mcpars[:,4+i*7]))+'+/-'+str(np.std(mcpars[:,4+i*7]))+'\n')
             f.write('gamma: '+ str(np.mean(mcpars[:,5+i*7]))+'+/-'+str(np.std(mcpars[:,5+i*7]))+'\n')
             
+            for i in range(npoly):
+                f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
+
             f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
-
-        for i in range(npoly):
-            f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
     f.close()
 
 def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,npoly=0):
@@ -688,7 +688,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly):
 def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
 
     bestpars = np.copy(m.params)
-    bestpars = np.append(bestpars,0.001) #add placeholder for jitter
+    bestpars = np.append(bestpars,0.5) #add placeholder for jitter
     pnames = np.copy(m.pnames)
     pnames = np.append(pnames,'jitter')
 
