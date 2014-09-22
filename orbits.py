@@ -50,8 +50,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
   
         #fake two telescopes
         telvec = np.zeros_like(jdb)
-        telvec[0:10] = 1
-        rv[0:10] += 30.0 + np.random.randn(10) #noiser data with offset
+        #telvec[0:10] = 1
+        #rv[0:10] += 30.0 + np.random.randn(10) #noiser data with offset
 
     else:
         print targname
@@ -96,7 +96,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #quart = orbel[3+norbits*6]
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
@@ -195,7 +195,8 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
-    plt.plot(tmod,poly,'g-')
+    if npoly > 0:
+        plt.plot(tmod,poly,'g-')
     #plt.plot(tmod,model_init,'g-')
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
