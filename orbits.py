@@ -50,8 +50,9 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         
         #fake two telescopes
         telvec = np.zeros_like(jdb)
-        telvec[0:10] = 1
-        rv[0:10] += 30.0 + np.random.randn(10) #noiser data with offset
+        #telvec[0:30] = 1
+        #rv[0:30] += 80.0 + np.random.randn(30) #noiser data with offset
+       
     else:
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
@@ -76,6 +77,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     ntel = np.unique(telvec).size
     if ntel > 1:
         print 'Including ',ntel-1,' offset terms'
+        print np.unique(telvec)
         offset = np.zeros(ntel-1)
 
 
@@ -97,7 +99,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #jitter - final term, MCMC only
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50, 0.01])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-5])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
@@ -124,11 +126,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
             #print 'set transit time: ', transit
 
     #append offsets if needed
-    #if ntels > 1:
-    #    guesspars
+    if ntel > 1:
+        guesspars = np.append(guesspars,np.zeros(ntel-1)+80.)
     
-    
-    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec,noffsets=noffsets)
+    print guesspars
+    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
     
 
     
@@ -141,7 +143,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly)
+    plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
     
     #call bootstrapping
     if nboot > 0:
@@ -181,24 +183,25 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     return m
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
     
-    model_init = rv_drive(guesspars,tmod,norbits,npoly) 
-    model_final = rv_drive(m.params,tmod,norbits,npoly)
+    model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
+    model_final = rv_drive(m.params,tmod,norbits,npoly,telvec)
     
     if npoly > 0:
         parst =  np.copy(m.params)
         parst[4] = 0.0
-        poly = rv_drive(parst,tmod,norbits,npoly)
+        poly = rv_drive(parst,tmod,norbits,npoly,telvec)
 
     #unphased data
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     plt.plot(tmod,model_final,'r-')
-    plt.plot(tmod,poly,'g-')
+    if npoly > 0:
+        plt.plot(tmod,poly,'g-')
     #plt.plot(tmod,model_init,'g-')
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
@@ -212,10 +215,10 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     parst[4] = 0.0 #other planets only
     parst[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
-    rvt = rv_drive(parst,jdb,norbits,npoly)   
+    rvt = rv_drive(parst,jdb,norbits,npoly,telvec)   
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
     #plt.plot((tmod - guess))
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
@@ -365,21 +368,25 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,noffsets=0,telvec=-1):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1):
     
     
     ip = np.arange(norbits)
+    
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
 
     if param_names == 0: #do something more clever here later
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma']*norbits
         poly_names = ['dvdt','quad','cubic','quart']
         param_names.extend(poly_names[:npoly]) 
-        
+        if ntel > 1:
+            off_names = ['offset']*(ntel-1)
+            param_names.extend(off_names)
             
 
     m = lsqmdl.Model(None, rv, 1./srv) #m is a class
-    #m.set_func(rv_drive,param_names, args=[jdb] )
-    m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly) )
+    m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
 
     #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
@@ -424,7 +431,11 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         
         m.lm_prob.p_limit(i+norbits*6, lower=-1e6, upper=1e6) #dvdt and higher
 
+    for i in range(ntel-1):
+        m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
+    print orbel
+    print param_names
     m.solve(orbel)
     #m.print_soln()
     return m
@@ -450,11 +461,14 @@ def tie_omega_function(tt, i):
 
     return calculate_omega
 
-def rv_drive(orbel, t, norbits, npoly):
+def rv_drive(orbel, t, norbits, npoly, telvec):
     #From rv_drive.pro in RVLIN by JTW
 
     if orbel.size > 20:
         print 'Warning: large number of params - are you sure you put the args in the right order?'
+
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
 
     rv = np.zeros_like(t)
    
@@ -506,6 +520,14 @@ def rv_drive(orbel, t, norbits, npoly):
     #now add polynomial
     for i in range(npoly):
         rv = rv + orbel[i+norbits*6]*(t - epoch)**(i+1)
+    
+    #now add offsets
+    tels = np.unique(telvec)
+    for i in range(ntel-1):
+        #print tels[i]
+        a = np.squeeze(np.where(telvec == tels[i]))
+        #print a.size
+        rv[a] += orbel[i+norbits*6+npoly]
 
     return rv
 
