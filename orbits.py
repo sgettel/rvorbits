@@ -482,10 +482,10 @@ def rv_drive(orbel, t, norbits, npoly):
         phase0[over] -= np.pi
         
         phase[:,i] = phase0
-
-        #calculate radial velocity
+        
         epoch = 0.0 #Yes, epoch corrected elsewhere
-            
+
+        #calculate radial velocity   
         rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma #+ dvdt*(t - epoch) + curv*(t - epoch)**2
 
     #now add polynomial
