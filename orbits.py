@@ -96,7 +96,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #quart = orbel[3+norbits*6]
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-50])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
