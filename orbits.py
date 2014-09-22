@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch master
+# Branch offset
 #
 
 
@@ -47,12 +47,15 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         #demo!
         sfile = open(home+'Dropbox/cfasgettel/py.lib/sgcode/rvorbits/209458.vel.txt')
         jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2))
-        
+        s = np.argsort(jdb)
+        jdb = jdb[s]
+        rv = rv[s]
+        srv = srv[s]
+
         #fake two telescopes
         telvec = np.zeros_like(jdb)
-        #telvec[0:30] = 1
-        #rv[0:30] += 80.0 + np.random.randn(30) #noiser data with offset
-       
+        telvec[80:] = 1
+        rv[80:] += 80.0 #+ np.random.randn(telvec.size-80) #noiser data with offset
     else:
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
@@ -99,7 +102,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #jitter - final term, MCMC only
 
     if targname == 'HD209458':
-        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+30, -1.49-5])#HD209458
+        guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
         transit = np.array([2452826.628514]) 
         mstar = 1.0
     
@@ -127,7 +130,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     #append offsets if needed
     if ntel > 1:
-        guesspars = np.append(guesspars,np.zeros(ntel-1)+80.)
+        guesspars = np.append(guesspars,np.zeros(ntel-1)+60.)
     
     print guesspars
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
@@ -216,6 +219,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     parst[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
     rvt = rv_drive(parst,jdb,norbits,npoly,telvec)   
+    telvec = np.zeros_like(tmod)
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
