@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch jitter
+# Branch master
 #
 
 
@@ -16,8 +16,6 @@ from pwkit import lsqmdl
 
 #
 # TO DO:
-# - jitter term
-# - plot trend if there is one
 # - histogram plots
 # - read orbit params from somewhere
 # - add offset terms
