@@ -644,7 +644,10 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
 
     if (theta >= lfloat).all() and (theta < hfloat).all():
         lnpri = 0.0
-        #pri_jitter = 
+
+        #now add penalties
+        #pen_jitter = 
+
         return lnpri
     else:
         return -np.inf
