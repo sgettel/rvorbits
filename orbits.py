@@ -25,7 +25,7 @@ from pwkit import lsqmdl
 
 
 #Given a target name, do everything! Eventually.
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
+def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no'):
 
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
@@ -60,12 +60,30 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
-     
+        telvec = np.zeros_like(jdb)
+
+        if keck == 'yes':
+            
+            sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'.dat')
+            kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(2,3,4))
+            kjdb = kjdb + 2.45e6 
+            krvnorm = krv - np.median(krv)
+            ktel = np.ones_like(jdb)
+
+            jdb = np.append(jdb,kjdb)
+            rvnorm = rv - np.median(rv)
+            rvnorm = np.append(rvnorm,krvnorm)
+            srv = np.append(srv,ksrv)
+            telvec = np.append(telvec,ktel)
+            print kjdb
+        else:
+            rvnorm = rv - np.median(rv)
+
     #adjust values to be sensible
     #if jdb[0] > epoch:
     #    print 'truncating dates'
     tnorm = jdb - epoch #truncate
-    rvnorm = rv - np.median(rv)
+    
     #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
     print np.min(tnorm),np.max(tnorm)
 
@@ -80,7 +98,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     ntel = np.unique(telvec).size
     if ntel > 1:
         print 'Including ',ntel-1,' offset terms'
-        print np.unique(telvec)
+        
         offset = np.zeros(ntel-1)
 
 
@@ -107,7 +125,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0, 0.0]) #K00273
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0])#, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
@@ -130,7 +148,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     #append offsets if needed
     if ntel > 1:
-        guesspars = np.append(guesspars,np.zeros(ntel-1)+60.)
+        guesspars = np.append(guesspars,np.zeros(ntel-1))
     
     print guesspars
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
