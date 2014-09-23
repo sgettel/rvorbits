@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch master
+# Branch jitter
 #
 
 
@@ -643,7 +643,9 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
 
 
     if (theta >= lfloat).all() and (theta < hfloat).all():
-        return 0.0
+        lnpri = 0.0
+        #pri_jitter = 
+        return lnpri
     else:
         return -np.inf
     
