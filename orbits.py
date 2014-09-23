@@ -68,7 +68,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
             kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(2,3,4))
             kjdb = kjdb + 2.45e6 
             krvnorm = krv - np.median(krv)
-            ktel = np.ones_like(jdb)
+            ktel = np.ones_like(kjdb)
 
             jdb = np.append(jdb,kjdb)
             rvnorm = rv - np.median(rv)
@@ -100,7 +100,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         print 'Including ',ntel-1,' offset terms'
         
         offset = np.zeros(ntel-1)
-
+    print telvec
 
     #read/process parameter guesses from somewhere
     #p = orbel[0+i*6]
@@ -125,11 +125,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0])#, 0.0]) #K00273
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0])#, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
 
     
     if targname == 'K00069':
@@ -148,7 +148,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     #append offsets if needed
     if ntel > 1:
-        guesspars = np.append(guesspars,np.zeros(ntel-1))
+        guesspars = np.append(guesspars,offset)
     
     print guesspars
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
@@ -453,6 +453,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         
         m.lm_prob.p_limit(i+norbits*6, lower=-1e6, upper=1e6) #dvdt and higher
 
+    #limit offset terms
     for i in range(ntel-1):
         m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
