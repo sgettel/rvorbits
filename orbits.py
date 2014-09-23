@@ -132,7 +132,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         for i in range(pguess.size):
             guesspars[6] = pguess[i]
+            if (pguess[i] == 487.0) or (pguess[i] == 520.0):
+                continue
             print pguess[i]
+            pfix = [1,1]
             m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
             m.print_soln()  
             mpsini = mass_estimate(m, mstar, norbits=norbits)
