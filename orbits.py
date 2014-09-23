@@ -101,11 +101,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  500.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
 
     
     if targname == 'K00069':
@@ -155,7 +155,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     #call MCMC    
     if nwalkers > 0:
-        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, norbits=norbits)
 #        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
@@ -163,7 +163,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #make a nice triangle plot
         
-        print pnames
+        #print pnames
         f = np.squeeze(flt.nonzero())
         fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
         fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
@@ -645,10 +645,12 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     if (theta >= lfloat).all() and (theta < hfloat).all():
         lnpri = 0.0
 
-        #now add penalties
-        #pen_jitter = 
+        #now add individual priors
+        jmin = 0.1
+        jmax = 5.0
+        pr_jitter = 1./(theta[-1]+jmin)*np.log(1.0 + jmax/jmin)
 
-        return lnpri
+        return lnpri + pr_jitter
     else:
         return -np.inf
     
@@ -672,7 +674,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly):
 def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
 
     bestpars = np.copy(m.params)
-    bestpars = np.append(bestpars,0.001) #add placeholder for jitter
+    bestpars = np.append(bestpars,0.2) #add placeholder for jitter
     pnames = np.copy(m.pnames)
     pnames = np.append(pnames,'jitter')
 
@@ -709,8 +711,9 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     flt = np.ones(npars) #all params float now, turn off individually  
 
     #probably doesn't need to be a loop...
+   
     for i in range(norbits):
-        
+       
         #fix normal orbit params first...
         
         #fix/limit period:
@@ -739,6 +742,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
         #fix gamma except first
         if i > 0:
+            
             flt[5+i*6] = 0
         plo[5+i*6] = -1e8
         phi[5+i*6] = 1e8
@@ -768,13 +772,14 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         phi[i+norbits*6] = 1e6
 
     #limit jitter
-    plo[-1] = 0.0
-    phi[-1] = 0.01
+    plo[-1] = 0.1
+    phi[-1] = 5.0
 
     #want some testing that the output of LM is sensible!
        
     
     f = np.squeeze(flt.nonzero())
+    
     varpars = bestpars[f]
     ndim = varpars.size
     
