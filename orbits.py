@@ -25,7 +25,7 @@ from pwkit import lsqmdl
 
 
 #Given a target name, do everything! Eventually.
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0):
+def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,outer_loop='no'):
 
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
@@ -101,11 +101,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mstar = 1.0
     
     if targname == 'K00273':
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
 
     
     if targname == 'K00069':
@@ -122,58 +122,75 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
             transit[i] -= epoch 
             #print 'set transit time: ', transit
  
+    if outer_loop == 'yes':
+        #brute force search of outer period
+        nboot = 0
+        nwalkers = 0
+        pguess = np.linspace(450,650,num=201)
+        outchisq = np.zeros_like(pguess)
+        outp = np.zeros_like(pguess)
 
+        for i in range(pguess.size):
+            guesspars[6] = pguess[i]
+            m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+            m.print_soln()  
+            mpsini = mass_estimate(m, mstar, norbits=norbits)
+            print 'mp*sin(i):         ',str(mpsini)
+            outp[i] = m.params[6]
+            outchisq[i] = m.rchisq
+        return m, pguess, outp, outchisq
+    else:
 
     
-    m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+        m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
 
 
     
     #display initial fit - want to show fixed params too
-    m.print_soln()  
+        m.print_soln()  
     
     
     #mass estimate
-    mpsini = mass_estimate(m, mstar, norbits=norbits)
-    print 'mp*sin(i):         ',str(mpsini)
+        mpsini = mass_estimate(m, mstar, norbits=norbits)
+        print 'mp*sin(i):         ',str(mpsini)
     
     #make plots
-    plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly)
+        plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly)
     
     #call bootstrapping
-    if nboot > 0:
-        bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, nsrv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
+        if nboot > 0:
+            bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, nsrv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
    
-        mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
+            mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
        
-        print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,npoly=npoly)
+            print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,npoly=npoly)
 
         #return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
-    else:
-        bootpars = -1
-        mparr_all = -1
+        else:
+            bootpars = -1
+            mparr_all = -1
 
     #call MCMC    
-    if nwalkers > 0:
-        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+            if nwalkers > 0:
+                bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
 #        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
-        mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
+                mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
-        print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
+                print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
 
         #make a nice triangle plot
         
-        print pnames
-        f = np.squeeze(flt.nonzero())
-        fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
-        fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
-        plt.close(fig)
-    else:
-        mcpars = -1
-        mparr_mc = -1
+                print pnames
+                f = np.squeeze(flt.nonzero())
+                fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
+                fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
+                plt.close(fig)
+            else:
+                mcpars = -1
+                mparr_mc = -1
 
         #return m, flt, chain, samples, mcpars# bestpars, varpars, flt, pnames # 
-    write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly)
+                write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly)
 
 
     return m
