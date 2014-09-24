@@ -56,6 +56,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         telvec = np.zeros_like(jdb)
         telvec[80:] = 1
         rv[80:] += 80.0 #+ np.random.randn(telvec.size-80) #noiser data with offset
+        rvnorm = rv - np.median(rv)
     else:
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
@@ -75,7 +76,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
             rvnorm = np.append(rvnorm,krvnorm)
             srv = np.append(srv,ksrv)
             telvec = np.append(telvec,ktel)
-            print kjdb
+            #print kjdb
         else:
             rvnorm = rv - np.median(rv)
 
@@ -85,7 +86,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     tnorm = jdb - epoch #truncate
     
     #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
-    print np.min(tnorm),np.max(tnorm)
+    #print np.min(tnorm),np.max(tnorm)
 
     if jitter > 0.0: 
         nsrv = np.sqrt(srv**2 + jitter**2)
@@ -100,7 +101,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         print 'Including ',ntel-1,' offset terms'
         
         offset = np.zeros(ntel-1)
-    print telvec
+    
 
     #read/process parameter guesses from somewhere
     #p = orbel[0+i*6]
@@ -129,7 +130,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         #2 planets...
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  530.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  450.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
 
     
     if targname == 'K00069':
@@ -150,7 +151,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     if ntel > 1:
         guesspars = np.append(guesspars,offset)
     
-    print guesspars
+    
     m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
     
 
@@ -162,9 +163,23 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #mass estimate
     mpsini = mass_estimate(m, mstar, norbits=norbits)
     print 'mp*sin(i):         ',str(mpsini)
+
+    #correct offset before plotting
+    tels = np.unique(telvec)
+    rvp = rvnorm
+    par0 = np.copy(m.params)
+    for i in range(ntel-1):
+        #print tels[i]
+        a = np.squeeze(np.where(telvec == tels[i+1]))
+        #print a.size
+        rvp[a] -= m.params[i+norbits*6+npoly]
+        m.params[i+norbits*6+npoly] = 0
     
+
+
     #make plots
-    plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
+    plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
+    m.params = par0
     
     #call bootstrapping
     if nboot > 0:
@@ -181,7 +196,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     #call MCMC    
     if nwalkers > 0:
-        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
+        bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits)
 #        m, flt, chain, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix)
         mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
         #print output from mass_estimate for mc
@@ -208,8 +223,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
-    
-    model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
+    #model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
     model_final = rv_drive(m.params,tmod,norbits,npoly,telvec)
     
     if npoly > 0:
@@ -457,8 +471,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
     for i in range(ntel-1):
         m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
-    print orbel
-    print param_names
+    #print orbel
+    #print param_names
     m.solve(orbel)
     #m.print_soln()
     return m
@@ -548,7 +562,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
     tels = np.unique(telvec)
     for i in range(ntel-1):
         #print tels[i]
-        a = np.squeeze(np.where(telvec == tels[i]))
+        a = np.squeeze(np.where(telvec == tels[i+1]))
         #print a.size
         rv[a] += orbel[i+norbits*6+npoly]
 
@@ -675,11 +689,7 @@ if __name__ == '__main__':
 #begin MCMC setup - following emcee line-fitting demo
 def lnprior(theta, fullpars, flt, pnames, plo, phi):
     
-    #some pretty basic limits for flat priors - I do this in setup_emcee
-    #low = np.array([0.1, 0.0, 0.0, 0.0, 0, -1e6, -1e3, -1])
-    #high = np.array([10*365.25, 3e6, 0.99, 360.0, 1e4, 1e6, 1e3, 1])
-    #print theta
-
+    
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
     lfloat = plo[flt.nonzero()]
@@ -689,26 +699,28 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     if (theta >= lfloat).all() and (theta < hfloat).all():
         return 0.0
     else:
+        #print pfloat[np.where(theta < lfloat)], pfloat[np.where(theta >= hfloat)]
         return -np.inf
     
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly):
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, telvec):
     lp = lnprior(theta, fullpars, flt, pnames, plo, phi)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly)
+    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec)
 
-def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly):
+def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
     
     newpars = np.copy(fullpars)
     newpars[flt.nonzero()] = theta
     #print newpars
-    model = rv_drive(newpars, jdb, norbit, npoly)
+    model = rv_drive(newpars, jdb, norbit, npoly, telvec)
     nsrv = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
+   # nsrv = srv
 
     return -0.5*np.sum((rv - model)**2/nsrv**2) #chisq
 
-def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200): 
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1): 
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,0.001) #add placeholder for jitter
@@ -735,6 +747,12 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     else:
         srv = srv_in
 
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
+        tels = np.unique(telvec)
+    else:
+        ntel = 1
+        
 #vectorizing loop
 #    ip = np.arange(norbits) #index for planets
 #    if norbits > 1:
@@ -806,9 +824,18 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         plo[i+norbits*6] = -1e6
         phi[i+norbits*6] = 1e6
 
+    #need to limit offset terms if present!
+    for i in range(ntel-1):
+        #print tels[i]
+        #a = np.squeeze(np.where(telvec == tels[i+1]))
+        #print a.size
+        #rv[a] += orbel[i+norbits*6+npoly]
+        plo[i+norbits*6+npoly] = -1e6
+        phi[i+norbits*6+npoly] = 1e6
+
     #limit jitter
     plo[-1] = 0.0
-    phi[-1] = 0.01
+    phi[-1] = 0.1
 
     #want some testing that the output of LM is sensible!
        
@@ -818,9 +845,9 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     ndim = varpars.size
     
     print 'MCMC params: ',pnames[f] 
-   
+    print varpars
 
-    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec)
   
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -836,13 +863,13 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     return bestpars, pnames, flt, samples, mcpars
 
 
-def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-3*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
