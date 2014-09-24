@@ -31,7 +31,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
 
     transit = np.zeros(1)
-    
+    telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
     
@@ -118,6 +118,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #quad = orbel[1+norbits*6]
     #cubic = orbel[2+norbits*6]
     #quart = orbel[3+norbits*6]
+
+    #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
+
+    #jitter - final term, MCMC only
 
     if targname == 'HD209458':
         guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
@@ -241,7 +245,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
     return m
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
@@ -277,7 +281,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
 
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
     #plt.plot((tmod - guess))
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
@@ -427,21 +431,24 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,noffsets=0,telvec=-1):
-
-    #NEED ntel here - wtf git?
-    
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1):
 
     ip = np.arange(norbits)
 
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
+    
     if param_names == 0: #do something more clever here later
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma']*norbits
         poly_names = ['dvdt','quad','cubic','quart']
         param_names.extend(poly_names[:npoly]) 
+        if ntel > 1:
+            off_names = ['offset']*(ntel-1)
+            param_names.extend(off_names)
 
     m = lsqmdl.Model(None, rv, 1./srv) #m is a class
     #m.set_func(rv_drive,param_names, args=[jdb] )
-    m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly) )
+    m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
 
     #print pfix, ' = pfix'
     #make some reasonable limits - don't need the loop?
@@ -519,11 +526,14 @@ def tie_omega_function(tt, i):
 
     return calculate_omega
 
-def rv_drive(orbel, t, norbits, npoly):
+def rv_drive(orbel, t, norbits, npoly, telvec):
     #From rv_drive.pro in RVLIN by JTW
 
     if orbel.size > 20:
         print 'Warning: large number of params - are you sure you put the args in the right order?'
+
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
 
     rv = np.zeros_like(t)
    
@@ -575,8 +585,7 @@ def rv_drive(orbel, t, norbits, npoly):
     #now add polynomial
     for i in range(npoly):
         rv = rv + orbel[i+norbits*6]*(t - epoch)**(i+1)
-
-    
+   
     #now add offsets
     tels = np.unique(telvec)
     for i in range(ntel-1):
@@ -584,7 +593,6 @@ def rv_drive(orbel, t, norbits, npoly):
         a = np.squeeze(np.where(telvec == tels[i+1]))
         #print a.size
         rv[a] += orbel[i+norbits*6+npoly]
-
 
     return rv
 
@@ -792,8 +800,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     #separate the params being varied from the full list
     flt = np.ones(npars) #all params float now, turn off individually  
 
-    #probably doesn't need to be a loop...
-   
+    #probably doesn't need to be a loop...   
     for i in range(norbits):
        
         #fix normal orbit params first...
@@ -823,8 +830,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         phi[4+i*6] = 1.0e5
 
         #fix gamma except first
-        if i > 0:
-            
+        if i > 0:            
             flt[5+i*6] = 0
         plo[5+i*6] = -1e8
         phi[5+i*6] = 1e8
