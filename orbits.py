@@ -137,8 +137,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         rpl = 1.82 #Me
         rple = 0.36
         #2 planets...
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  490.0, 2455008.066, 0.0, 0.0, 100.0,0.0])
-
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  490.0, 2455008.066, 0.0, 0.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.92, -32.0,  490.0, 2454979.3633, 0.28, 23.0, 110.0,0.0])
 
     
     if targname == 'K00069':
@@ -193,11 +193,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mpsini = mass_estimate(m, mstar, norbits=norbits)
         print 'mp*sin(i):         ',str(mpsini)
 
-        #density of first planet...
-        re2cm = 1./6.378e8
-        vol = 4./3.*np.pi*(rpl/re2cm)**3
-        print vol
-        dpl = mpsini[0]*5.973e27/vol
+        #density estimate
+        dpl = density_estimate(mpsini,rpl)
         print 'density:           ',str(dpl),'g/cc'
 
         #correct offset before plotting
@@ -443,6 +440,18 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
         return mpsini, mparr_mc
     else:
         return mpsini
+
+def density_estimate(mpsini,rpl):
+    
+    rpl = ut.arrayify(rpl)
+    nplanets = rpl.size
+
+    re2cm = 1./6.378e8
+    vol = 4./3.*np.pi*(rpl/re2cm)**3 #cm**3
+    dpl = mpsini[0:nplanets]*5.973e27/vol
+
+    return dpl
+
 
    
 #this should set limits and call lsqmdl, should be callable by bootstrapper...
