@@ -16,9 +16,9 @@ from pwkit import lsqmdl
 
 #
 # TO DO:
+# - fix jitter
 # - histogram plots
 # - read orbit params from somewhere
-# - add offset terms
 # - test MCMC
 
 
@@ -122,6 +122,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
 
     #jitter - final term, MCMC only
+    rpl = 0.0
 
     if targname == 'HD209458':
         guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
@@ -130,11 +131,13 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     
     if targname == 'K00273':
 
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010])#, 0.0])#, 0.0]) #K00273
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
+        rpl = 1.82 #Me
+        rple = 0.36
         #2 planets...
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  450.0, 2455008.066, 0.0, 90.0, 100.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  490.0, 2455008.066, 0.0, 0.0, 100.0,0.0])
 
 
     
@@ -190,6 +193,13 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         mpsini = mass_estimate(m, mstar, norbits=norbits)
         print 'mp*sin(i):         ',str(mpsini)
 
+        #density of first planet...
+        re2cm = 1./6.378e8
+        vol = 4./3.*np.pi*(rpl/re2cm)**3
+        print vol
+        dpl = mpsini[0]*5.973e27/vol
+        print 'density:           ',str(dpl),'g/cc'
+
         #correct offset before plotting
         tels = np.unique(telvec)
         rvp = rvnorm
@@ -206,6 +216,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
 
+        #now put offset back in!
+        #print rvp - rvnorm
     
     #call bootstrapping
         if nboot > 0:
@@ -240,7 +252,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
 
         
-        write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly)
+        write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
 
     return m
@@ -255,7 +267,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     if npoly > 0:
         parst =  np.copy(m.params)
         parst[4] = 0.0
-        poly = rv_drive(parst,tmod,norbits,npoly)
+        poly = rv_drive(parst,tmod,norbits,npoly,telvec)
 
     #unphased data
     plt.figure(1)
@@ -290,7 +302,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
 #    print targname
 #    plot histograms!
 
-def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0):
+def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
     
@@ -310,6 +322,9 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
     for i in range(npoly):
         f.write(str(poly_names[i])+str(m.params[i+norbits*6]) +'\n')
     f.write(str('r chi sq: ')+str(m.rchisq)+'\n')
+
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
 
     if len(np.array(bootpars).shape) > 0: #print bootstrap errs
         for i in range(norbits):
@@ -332,12 +347,12 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
         for i in range(norbits):
             f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
-            f.write('Per: '+ str(np.mean(mcpars[:,0+i*7]))+'+/-'+str(np.std(mcpars[:,0+i*7]))+'\n')
-            f.write('Tp: '+ str(np.mean(mcpars[:,1+i*7]))+'+/-'+str(np.std(mcpars[:,1+i*7]))+'\n')
-            f.write('ecc: '+ str(np.mean(mcpars[:,2+i*7]))+'+/-'+str(np.std(mcpars[:,2+i*7]))+'\n')
-            f.write('om: '+ str(np.mean(mcpars[:,3+i*7]))+'+/-'+str(np.std(mcpars[:,3+i*7]))+'\n')
-            f.write('K1: '+ str(np.mean(mcpars[:,4+i*7]))+'+/-'+str(np.std(mcpars[:,4+i*7]))+'\n')
-            f.write('gamma: '+ str(np.mean(mcpars[:,5+i*7]))+'+/-'+str(np.std(mcpars[:,5+i*7]))+'\n')
+            f.write('Per: '+ str(np.mean(mcpars[:,0+i*6]))+'+/-'+str(np.std(mcpars[:,0+i*6]))+'\n')
+            f.write('Tp: '+ str(np.mean(mcpars[:,1+i*6]))+'+/-'+str(np.std(mcpars[:,1+i*6]))+'\n')
+            f.write('ecc: '+ str(np.mean(mcpars[:,2+i*6]))+'+/-'+str(np.std(mcpars[:,2+i*6]))+'\n')
+            f.write('om: '+ str(np.mean(mcpars[:,3+i*6]))+'+/-'+str(np.std(mcpars[:,3+i*6]))+'\n')
+            f.write('K1: '+ str(np.mean(mcpars[:,4+i*6]))+'+/-'+str(np.std(mcpars[:,4+i*6]))+'\n')
+            f.write('gamma: '+ str(np.mean(mcpars[:,5+i*6]))+'+/-'+str(np.std(mcpars[:,5+i*6]))+'\n')
             
             f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
             f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
@@ -469,8 +484,11 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
             m.lm_prob.p_value(2+i*6, 0.0, fixed=True) 
         else:
             m.lm_prob.p_limit(2+i*6, lower=0.0, upper=0.99) #ecc must be physical 
-        #limit omega
-        m.lm_prob.p_limit(3+i*6, lower=0.0, upper=360.0)
+        #fix/limit omega
+        if circ[i] == 1:
+            m.lm_prob.p_value(3+i*6, 0.0, fixed=True) #convention
+        else:
+            m.lm_prob.p_limit(3+i*6, lower=0.0, upper=360.0)
 
         #limit K
         m.lm_prob.p_limit(4+i*6, lower=0.0, upper=1.0e5) #K must be physical
@@ -728,7 +746,7 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
         lnpri = 0.0
 
         #now add individual priors
-        jmin = 0.1
+        jmin = 0.01
         jmax = 5.0
         pr_jitter = 1./(theta[-1]+jmin)*np.log(1.0 + jmax/jmin)
 
@@ -822,6 +840,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         phi[2+i*6] = 0.99
 
         #limit omega
+        if circ[i] == 1:
+            flt[3+i*6] = 0
         plo[3+i*6] = 0.0
         phi[3+i*6] = 360.0
 
@@ -870,7 +890,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
     #limit jitter
     plo[-1] = 0.1
-    phi[-1] = 5.0
+    phi[-1] = 1.5
 
 
     #want some testing that the output of LM is sensible!
