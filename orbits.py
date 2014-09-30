@@ -63,6 +63,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
         telvec = np.zeros_like(jdb)
+        print jdb.size
 
         if keck == 'yes':
             
@@ -252,7 +253,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
 
-    return m
+    return m, jdb, rv, srv
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
    
