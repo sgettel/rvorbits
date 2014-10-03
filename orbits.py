@@ -65,6 +65,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         telvec = np.zeros_like(jdb)
         print jdb.size
 
+        jdb0 = np.copy(jdb)
+        rv0 = np.copy(rv)
+        srv0 = np.copy(srv)
+
         if keck == 'yes':
             
             sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'.dat')
@@ -139,7 +143,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         rple = 0.36
         #2 planets...
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  490.0, 2455008.066, 0.0, 0.0, 100.0,0.0])
-        guesspars = np.array([10.573769, 2455008.06601, 0.4, 90.0, 1.92, -32.0,  490.0, 2454979.3633, 0.28, 23.0, 110.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.1, 90.0, 1.92, -32.0,  500.0, 2454979.3633, 0.28, 23.0, 110.0,0.0])
 
     
     if targname == 'K00069':
@@ -252,8 +256,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         
         write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
-
-    return m, jdb, rv, srv
+    return m, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
    
