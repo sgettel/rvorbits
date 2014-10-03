@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch master
+# Branch jitter - for fixing likelihood and priors for jitter term
 #
 
 
@@ -16,7 +16,6 @@ from pwkit import lsqmdl
 
 #
 # TO DO:
-# - fix jitter
 # - histogram plots
 # - read orbit params from somewhere
 # - test MCMC
@@ -204,12 +203,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #correct offset before plotting
         tels = np.unique(telvec)
-        rvp = rvnorm
+        rvp = np.zeros_like(rvnorm)
         par0 = np.copy(m.params)
         for i in range(ntel-1):
-            #print tels[i]
             a = np.squeeze(np.where(telvec == tels[i+1]))
-            #print a.size
+            
             rvp[a] -= m.params[i+norbits*6+npoly]
             m.params[i+norbits*6+npoly] = 0
 
@@ -259,7 +257,14 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     return m, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
-   
+
+    #save uncorrected RVs, if needed
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
+
+    #if ntel > 1:
+        
+
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
     #model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
@@ -754,16 +759,11 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     lfloat = plo[flt.nonzero()]
     hfloat = phi[flt.nonzero()]
 
-
+    #flat priors for all
     if (theta >= lfloat).all() and (theta < hfloat).all():
         lnpri = 0.0
 
-        #now add individual priors
-        jmin = 0.01
-        jmax = 5.0
-        pr_jitter = 1./(theta[-1]+jmin)*np.log(1.0 + jmax/jmin)
-
-        return lnpri + pr_jitter
+        return lnpri 
     else:
         #print pfloat[np.where(theta < lfloat)], pfloat[np.where(theta >= hfloat)]
         return -np.inf
@@ -779,17 +779,22 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
     
     newpars = np.copy(fullpars)
     newpars[flt.nonzero()] = theta
-    #print newpars
-    model = rv_drive(newpars, jdb, norbit, npoly, telvec)
-    nsrv = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
-   # nsrv = srv
+    
+    #jitter = newpars[-1]
 
-    return -0.5*np.sum((rv - model)**2/nsrv**2) #chisq
+    model = rv_drive(newpars, jdb, norbit, npoly, telvec)
+
+    stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
+
+    l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
+    chisq = -0.5*np.sum((rv - model)**2/stot**2)
+
+    return l0 + chisq 
 
 def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1): 
 
     bestpars = np.copy(m.params)
-    bestpars = np.append(bestpars,0.2) #add placeholder for jitter
+    bestpars = np.append(bestpars,0.5) #add placeholder for jitter
     pnames = np.copy(m.pnames)
     pnames = np.append(pnames,'jitter')
 
@@ -902,8 +907,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         phi[i+norbits*6+npoly] = 1e6
 
     #limit jitter
-    plo[-1] = 0.1
-    phi[-1] = 1.5
+    plo[-1] = 0.001
+    phi[-1] = 5.0
 
 
     #want some testing that the output of LM is sensible!
