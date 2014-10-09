@@ -22,7 +22,7 @@ from pwkit import lsqmdl
 
 
 #Given a target name, do everything! Eventually.
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no'):
+def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
 
 
     if npoly > 4:
@@ -141,9 +141,10 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         rpl = 1.82 #Me
         rple = 0.36
         #2 planets...
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498,  490.0, 2455008.066, 0.0, 0.0, 100.0,0.0])
-        guesspars = np.array([10.573769, 2455008.06601, 0.1, 90.0, 1.92, -32.0,  500.0, 2454979.3633, 0.28, 23.0, 110.0,0.0])
-
+       
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.92, -32.0,  500.0, 2454979.3633, 0.28, 23.0, 110.0,0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -52.0,  500.0, 2454994.17, 0.29, 30.0, 120.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
     
     if targname == 'K00069':
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -203,11 +204,12 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #correct offset before plotting
         tels = np.unique(telvec)
-        rvp = np.zeros_like(rvnorm)
+        #rvp = np.zeros_like(rvnorm)
+        rvp = rvnorm
         par0 = np.copy(m.params)
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
-            
+            print 'offset: ', m.params[i+norbits*6+npoly]
             rvp[a] -= m.params[i+norbits*6+npoly]
             m.params[i+norbits*6+npoly] = 0
 
@@ -218,7 +220,8 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #now put offset back in!
         #print rvp - rvnorm
-    
+        #print tels
+
     #call bootstrapping
         if nboot > 0:
             bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, nsrv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
@@ -234,9 +237,11 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
 
         #call MCMC    
         if nwalkers > 0:
-            bestpars, pnames, flt, samples, mcpars = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits)
+            bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
 
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
+            dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
+
             #print output from mass_estimate for mc
             print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
 
@@ -254,7 +259,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         
         write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
-    return m, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk
+    return m, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
 
@@ -304,7 +309,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
 
-#def plot_pars(targname,bootpars,mparr_all,norbits=1):
+#def plot_hist(targname,bootpars,mparr_all,norbits=1):
 #    print targname
 #    plot histograms!
 
@@ -450,7 +455,7 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     else:
         return mpsini
 
-def density_estimate(mpsini,rpl):
+def density_estimate(mpsini,rpl,mcpar=-1,rple=-1):
     
     rpl = ut.arrayify(rpl)
     nplanets = rpl.size
@@ -791,7 +796,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
 
     return l0 + chisq 
 
-def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1): 
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1,nsteps=1000): 
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,0.5) #add placeholder for jitter
@@ -922,7 +927,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     print 'MCMC params: ',pnames[f] 
     print varpars
 
-    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps)
   
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -935,7 +940,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         mcpars[:,f[i]] = samples[:,i]
 
     #return m, flt, chain, samples, mcpars
-    return bestpars, pnames, flt, samples, mcpars
+    return bestpars, pnames, flt, samples, mcpars, chain
 
 
 def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1):
