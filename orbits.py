@@ -14,14 +14,7 @@ import matplotlib.pyplot as plt
 import utils as ut
 from pwkit import lsqmdl
 
-#
-# TO DO:
-# - histogram plots
-# - read orbit params from somewhere
-# - test MCMC
 
-
-#Given a target name, do everything! Eventually.
 def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
 
 
@@ -143,7 +136,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     ip = np.arange(norbits)
     guesspars[1+ip*6] -= epoch
 
-    for i in range(transit.size):  #do something more clever here...
+    for i in range(transit.size):  
         if not transit[i] == 0.0:
             transit[i] -= epoch 
             #print 'set transit time: ', transit
@@ -206,9 +199,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
 
-        #now put offset back in!
-        #print rvp - rvnorm
-        #print tels
+        
 
     #call bootstrapping
         if nboot > 0:
@@ -255,9 +246,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
 
-    #if ntel > 1:
-        
-
+   
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
     #model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
@@ -464,7 +453,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
     
-    if param_names == 0: #do something more clever here later
+    if param_names == 0: 
         param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma']*norbits
         poly_names = ['dvdt','quad','cubic','quart']
         param_names.extend(poly_names[:npoly]) 
@@ -472,8 +461,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
             off_names = ['offset']*(ntel-1)
             param_names.extend(off_names)
 
-    m = lsqmdl.Model(None, rv, 1./srv) #m is a class
-    #m.set_func(rv_drive,param_names, args=[jdb] )
+    m = lsqmdl.Model(None, rv, 1./srv) 
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
 
     #print pfix, ' = pfix'
@@ -527,11 +515,10 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
     for i in range(ntel-1):
         m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
-    #print orbel
-    #print param_names
+    
 
     m.solve(orbel)
-    #m.print_soln()
+   
     return m
 
 
@@ -546,7 +533,7 @@ def tie_omega_function(tt, i):
         theta_tt = calc_true_anomaly(p, tp, ecc, tt[i]) #in radians
         omega = (np.pi/2.0 - theta_tt)*180.0/np.pi
          
-        if omega < 0:     #do something more clever
+        if omega < 0:    
             omega += 360.0
         if omega > 360.0:
             omega -= 360.0
@@ -558,9 +545,7 @@ def tie_omega_function(tt, i):
 def rv_drive(orbel, t, norbits, npoly, telvec):
     #From rv_drive.pro in RVLIN by JTW
 
-    if orbel.size > 20:
-        print 'Warning: large number of params - are you sure you put the args in the right order?'
-
+   
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
 
@@ -577,10 +562,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
         gamma = orbel[5+i*6]
 
 
-#        dvdt = orbel[6+i*7]
-#        curv = 0
-#        if i == 0 and nplanets*7 == orbel.size-1: # if 1 too many elements,
-#            curv = orbel[-1]                      # last is curvature
+
 
         #Error checking
         if p < 0 or ecc < 0 or ecc >= 1 or k < 0:
@@ -647,29 +629,17 @@ def kepler(inM,inecc):
     marr = ut.arrayify(inM)
     ecc = ut.arrayify(inecc)
     
-#    if len(np.array(inM).shape) == 0:
-#        marr = np.array([inM])
-#    else:
-#        marr = np.array(inM)
-#    if len(np.array(inecc).shape) == 0:
-#        ecc = np.array([inecc])
-#    else:
-#        ecc = np.array(inecc)
-    
+
     nm = marr.size    #nm = nrv, ~100
     nec = ecc.size #nec = 1
-    #if nec == 1 and nm > 1:   #Get rid of this...
-    #    eccarr = fan(eccarr,nm)
-    #if nec > 1 and nm == 1:
-    #    marr = fan(marr,nec)
-
+ 
     conv = 1e-12 #convergence criteria
-    k = 0.85     #scale factor?
+    k = 0.85     #scale factor
     
     mphase = marr/(2.0*np.pi)
     #print mphase.size, mphase.shape
 
-    #apply the relevant part of restrict.pro? Missing some error checking
+    
     under = np.squeeze(np.where(mphase < 0))
     mphase[under] +=1
     over = np.squeeze(np.where(mphase >= 1))
