@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 
 
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
+def orbits_test(targname='K00069',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
 
 
     if npoly > 4:
@@ -82,10 +82,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
     #if jdb[0] > epoch:
     #    print 'truncating dates'
     tnorm = jdb - epoch #truncate
-    
-    #print np.min(rvnorm),np.max(rvnorm),np.min(rv),np.max(rv)
-    #print np.min(tnorm),np.max(tnorm)
-
+  
     if jitter > 0.0: 
         nsrv = np.sqrt(srv**2 + jitter**2)
         print 'Adding ',str(jitter),' m/s fixed jitter'
@@ -209,7 +206,7 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
        
             print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,npoly=npoly)
 
-        #return m0, bootpar,sigpar, mparr_all #jdb, rv, nsrv
+        
         else:
             bootpars = -1
             mparr_all = -1
@@ -249,7 +246,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
-    #model_init = rv_drive(guesspars,tmod,norbits,npoly,telvec) 
+    
     model_final = rv_drive(m.params,tmod,norbits,npoly,telvec)
     
     if npoly > 0:
@@ -263,7 +260,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.plot(tmod,model_final,'r-')
     if npoly > 0:
         plt.plot(tmod,poly,'g-')
-    #plt.plot(tmod,model_init,'g-')
+    
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
@@ -286,9 +283,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
 
-#def plot_hist(targname,bootpars,mparr_all,norbits=1):
-#    print targname
-#    plot histograms!
+
 
 def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
     
@@ -445,7 +440,7 @@ def density_estimate(mpsini,rpl,mcpar=-1,rple=-1):
 
 
    
-#this should set limits and call lsqmdl, should be callable by bootstrapper...
+
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1):
 
     ip = np.arange(norbits)
@@ -553,7 +548,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
    
     phase = np.zeros((rv.size,norbits))
     
-    for i in range(norbits):  #get rid of the for loops...
+    for i in range(norbits):  
         p = orbel[0+i*6]
         tp = orbel[1+i*6]
         ecc = orbel[2+i*6]
@@ -591,7 +586,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
         #calculate radial velocity
         epoch = 0.0 #Yes, epoch corrected elsewhere
             
-        rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma #+ dvdt*(t - epoch) + curv*(t - epoch)**2
+        rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma 
 
     #now add polynomial
     for i in range(npoly):
@@ -728,7 +723,7 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
 
         return lnpri 
     else:
-        #print pfloat[np.where(theta < lfloat)], pfloat[np.where(theta >= hfloat)]
+        
         return -np.inf
     
 
@@ -787,10 +782,6 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     else:
         ntel = 1
         
-#vectorizing loop
-#    ip = np.arange(norbits) #index for planets
-#    if norbits > 1:
-#        ip2 = np.arange(norbits-1)+1 #index for planets after 1st one
 
     #these will hold reasonable limits on priors
     plo = np.zeros(npars)
@@ -799,7 +790,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     #separate the params being varied from the full list
     flt = np.ones(npars) #all params float now, turn off individually  
 
-    #probably doesn't need to be a loop...   
+    
     for i in range(norbits):
        
         #fix normal orbit params first...
@@ -836,14 +827,6 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         plo[5+i*6] = -1e8
         phi[5+i*6] = 1e8
 
-#        #optionally fix 1st trend, fix all after
-#        if i == 0:              #use a different logic statement...
-#            if trend == 0:
-#                flt[6+i*7] = 0 
-#        else:
-#            flt[6+i*7] = 0 
-#        plo[6+i*7] = -1e3
-#        phi[6+i*7] = 1e3
 
         #now consider known transits...
         if not tt[i] == 0:
@@ -862,10 +845,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
     #need to limit offset terms if present!
     for i in range(ntel-1):
-        #print tels[i]
-        #a = np.squeeze(np.where(telvec == tels[i+1]))
-        #print a.size
-        #rv[a] += orbel[i+norbits*6+npoly]
+        
         plo[i+norbits*6+npoly] = -1e6
         phi[i+norbits*6+npoly] = 1e6
 
@@ -874,7 +854,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     phi[-1] = 5.0
 
 
-    #want some testing that the output of LM is sensible!
+   
        
     
     f = np.squeeze(flt.nonzero())
