@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch master
+# Branch clean
 #
 
 
@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 
 
-def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
 
 
     if npoly > 4:
@@ -209,20 +209,6 @@ def orbits_test(targname='K00273',jitter=0.0,nboot=1000,epoch=2.455e6,circ=0,max
         plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
 
-        
-
-    #call bootstrapping
-        if nboot > 0:
-            bootpars, meanpar, sigpar = bootstrap_rvs(m.params, tnorm, rvnorm, nsrv,nboot=nboot,jitter=jitter,circ=circ,npoly=npoly,tt=transit,pfix=pfix,norbits=norbits)
-   
-            mpsini, mparr_all = mass_estimate(m, mstar, norbits=norbits, bootpar=bootpars)
-       
-            print_boot_errs(meanpar, sigpar, mpsini, mparr_all, norbits=norbits,npoly=npoly)
-
-        
-        else:
-            bootpars = -1
-            mparr_all = -1
 
         #call MCMC    
         if nwalkers > 0:
@@ -298,7 +284,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
 
 
 
-def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
+def write_full_soln(m,targname,mpsini, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
     
@@ -322,24 +308,8 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
 
-    if len(np.array(bootpars).shape) > 0: #print bootstrap errs
-        for i in range(norbits):
-            f.write('                                               \n')
-            f.write('*****Planet '+str(i+1)+' Bootstrap Errors:***** \n')
-            f.write('Per: '+ str(np.mean(bootpars[:,0+i*6]))+'+/-'+str(np.std(bootpars[:,0+i*6]))+'\n')
-            f.write('Tp: '+ str(np.mean(bootpars[:,1+i*6]))+'+/-'+str(np.std(bootpars[:,1+i*6]))+'\n')
-            f.write('ecc: '+ str(np.mean(bootpars[:,2+i*6]))+'+/-'+str(np.std(bootpars[:,2+i*6]))+'\n')
-            f.write('om: '+ str(np.mean(bootpars[:,3+i*6]))+'+/-'+str(np.std(bootpars[:,3+i*6]))+'\n')
-            f.write('K1: '+ str(np.mean(bootpars[:,4+i*6]))+'+/-'+str(np.std(bootpars[:,4+i*6]))+'\n')
-            f.write('gamma: '+ str(np.mean(bootpars[:,5+i*6]))+'+/-'+str(np.std(bootpars[:,5+i*6]))+'\n')
-
-            f.write('mp*sin(i): '+str(np.mean(mparr_all[i,:]))+'+/-'+str(np.std(mparr_all[i,:]))+'\n')
-            f.write('mass error:'+ str(np.std(mparr_all[i,:])/mpsini[i]*100)+'%'+'\n')
-
-        for i in range(npoly):
-            f.write(str(poly_names[i])+str(np.mean(bootpars[:,i+norbits*6]))+'+/-'+str(np.std(bootpars[:,i+norbits*6])) +'\n') 
-
-    if len(np.array(mcpars).shape) > 0: #print bootstrap errs
+    
+    if len(np.array(mcpars).shape) > 0: #print MCMC errs
         for i in range(norbits):
             f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
@@ -357,25 +327,6 @@ def write_full_soln(m,targname,mpsini, bootpars=-1, mparr_all=-1, mcpars=-1, mpa
             f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
     f.close()
 
-def print_boot_errs(meanpar,sigpar, mpsini, mparr_all,norbits=1,npoly=0):
- #   print mparr_all.shape
-    poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
-    for i in range(norbits):
-        print '                                               '
-        print '*****Planet ',str(i+1),' Bootstrap Errors:*****'
-        print 'Per: ', str(meanpar[i*6]),'+/-',str(sigpar[i*6])
-        print 'Tp: ', str(meanpar[i*6+1]),'+/-',str(sigpar[i*6+1])
-        print 'ec: ', str(meanpar[i*6+2]),'+/-',str(sigpar[i*6+2])
-        print 'om: ', str(meanpar[i*6+3]),'+/-',str(sigpar[i*6+3])
-        print 'K: ', str(meanpar[i*6+4]),'+/-',str(sigpar[i*6+4])
-        print 'gamma: ', str(meanpar[i*6+5]),'+/-',str(sigpar[i*6+5])
-
-        print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
-        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
-
-    for i in range(npoly):
-        print str(poly_names[i]), str(meanpar[i+norbits*6]), '+/-', str(sigpar[i+norbits*6])
-    return
 
 def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0):
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
@@ -688,33 +639,6 @@ def kepler(inM,inecc):
 
     return Earr
 
-def bootstrap_rvs(bestpar, jdb, rv, srv,nboot=1000,jitter=0,circ=0,npoly=0,tt=np.zeros(1),pfix=1,norbits=1):
-    #based on the general method of bootpar.pro by SXW
-    
-    bestfit = rv_drive(bestpar, jdb,norbits,npoly)
-    #print bestpar.size, bestpar.shape
-    resid = rv - bestfit
-
-    #nboot = np.max([nboot,resid.size*np.log10(resid.size)**2]).astype(int) #why this limit?
-    print 'nboot = ',nboot
-
-    bootpar = np.zeros((nboot,bestpar.size))
-    
-    for i in range(nboot): #get rid of the for loop...
-        if i%100 == 0:
-            print (i+0.0)/nboot*100,'%'
-        #print i 
-        scramble = np.random.randint(jdb.size,size=jdb.size)#random indices with replacement
-        tmprv = resid[scramble] + bestfit            #scramble residuals
-        tmperr = srv[scramble]                      #error goes with individual residual
-
-        mi = rvfit_lsqmdl(bestpar, jdb, tmprv, tmperr, jitter=jitter,circ=circ,norbits=norbits,npoly=npoly,tt=tt,pfix=pfix)
-        bootpar[i,:] = mi.params
-
-    meanpar = np.mean(bootpar,axis=0)
-    sigpar = np.std(bootpar,axis=0)
-    
-    return bootpar, meanpar, sigpar
 
 #to run as ...orbits.py
 if __name__ == '__main__':
