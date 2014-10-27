@@ -50,7 +50,30 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         rv[80:] += 80.0 #+ np.random.randn(telvec.size-80) #noiser data with offset
         rvnorm = rv - np.median(rv)
 
+    elif targname == 'K00069':
+        sfile = open(home+'Dropbox/cfasgettel/research/papers_collab/kep93_harpsn_data_4test.txt')
+        jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2),skiprows=1)
+        rvnorm = rv - np.median(rv)
+
+        jdb0 = np.copy(jdb)
+        rv0 = np.copy(rv)
+        srv0 = np.copy(srv)
+
+        if keck == 'yes':
+            sfile = open(home+'Dropbox/cfasgettel/research/papers_collab/kep93_hires_data_4test.txt')
+            kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2),skiprows=1)
+            krvnorm = krv - np.median(krv)
+            ktel = np.ones_like(kjdb)
+                
+            jdb = np.append(jdb,kjdb)
+            rvnorm = rv - np.median(rv)
+            rvnorm = np.append(rvnorm,krvnorm)
+            srv = np.append(srv,ksrv)
+            telvec = np.append(telvec,ktel)
+        
     else:
+
+
         print targname
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
@@ -63,12 +86,14 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
         if keck == 'yes':
             
+            
+
             sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'.dat')
             kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(2,3,4))
             kjdb = kjdb + 2.45e6 
             krvnorm = krv - np.median(krv)
             ktel = np.ones_like(kjdb)
-
+                
             jdb = np.append(jdb,kjdb)
             rvnorm = rv - np.median(rv)
             rvnorm = np.append(rvnorm,krvnorm)
@@ -215,7 +240,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
             bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
 
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
-            dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
+            #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
 
             #print output from mass_estimate for mc
             print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
@@ -232,9 +257,9 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
 
         
-        write_full_soln(m, targname, mpsini, bootpars=bootpars, mparr_all = mparr_all, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
+        write_full_soln(m, targname, mpsini, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
-    return m, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
+    return m#, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
 
