@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch clean
+# Branch BIC
 #
 
 
@@ -150,14 +150,14 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
     
     if targname == 'K00273':
 
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0, 0.0]) #K00273
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
         transit = np.array([2455008.06601,0.0]) 
         mstar = 1.07
         rpl = 1.82 #Me
         rple = 0.36
 
         #2 planets...       
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
 
     
     if targname == 'K00069':
@@ -192,7 +192,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
                 continue
             print pguess[i]
             pfix = [1,1]
-            m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+            m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
             m.print_soln()  
             mpsini = mass_estimate(m, mstar, norbits=norbits)
             print 'mp*sin(i):         ',str(mpsini)
@@ -201,15 +201,16 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         return m, pguess, outp, outchisq
 
     else:
-        m = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
+        m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
 
     
         #display initial fit - want to show fixed params too
         m.print_soln()  
     
         #calc bayesian information criterion
-        #bic = calc_bic(m)
-    
+        bic = calc_bic(m,flt,srv)
+        print 'BIC:          ',str(bic)
+
         #mass estimate
         mpsini = mass_estimate(m, mstar, norbits=norbits)
         print 'mp*sin(i):         ',str(mpsini)
@@ -257,9 +258,20 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
 
         
-        write_full_soln(m, targname, mpsini, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
+        write_full_soln(m, targname, mpsini, bic, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
     return m#, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
+
+def calc_bic(m, flt, srv):
+    
+    #calc BIC for LM fit, use original errors
+    chisq = np.sum(m.resids**2/srv**2)
+    k = np.sum(flt)
+    n = srv.size
+    bic = chisq + k*np.log(n) 
+
+    return bic
+    
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
 
@@ -309,7 +321,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
 
 
 
-def write_full_soln(m,targname,mpsini, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
+def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
     
@@ -322,14 +334,16 @@ def write_full_soln(m,targname,mpsini, mparr_all=-1, mcpars=-1, mparr_mc=-1,norb
         f.write('ecc: '+str(m.params[2+i*6])+'\n')
         f.write('om: '+str(m.params[3+i*6])+'\n')
         f.write('K1: '+str(m.params[4+i*6])+'\n')
-        f.write('gamma: '+str(m.params[5+i*6])+'\n')
-
-        f.write('mp*sin(i): '+str(mpsini[i])+'\n')
+        f.write('gamma: '+str(m.params[5+i*6])+'\n')        
     
     for i in range(npoly):
         f.write(str(poly_names[i])+str(m.params[i+norbits*6]) +'\n')
-    f.write(str('r chi sq: ')+str(m.rchisq)+'\n')
-
+    f.write('r chi sq: '+str(m.rchisq)+'\n')
+    f.write('BIC: '+str(bic)+'\n')
+    
+    for i in range(norbits):
+        f.write('mp*sin(i): '+str(mpsini[i])+'\n')
+    
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
 
@@ -345,14 +359,15 @@ def write_full_soln(m,targname,mpsini, mparr_all=-1, mcpars=-1, mparr_mc=-1,norb
             f.write('K1: '+ str(np.mean(mcpars[:,4+i*6]))+'+/-'+str(np.std(mcpars[:,4+i*6]))+'\n')
             f.write('gamma: '+ str(np.mean(mcpars[:,5+i*6]))+'+/-'+str(np.std(mcpars[:,5+i*6]))+'\n')
             
-            f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
-            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
+            
 
         for i in range(npoly):
             f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
-    f.close()
-
-
+    
+        for i in range(norbits):
+            f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
+            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
+    f.close() 
 def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0):
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
     for i in range(norbits):
@@ -445,6 +460,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
             off_names = ['offset']*(ntel-1)
             param_names.extend(off_names)
 
+    flt = np.ones_like(orbel) #Free param? Turn off individually
+
     m = lsqmdl.Model(None, rv, 1./srv) 
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
 
@@ -456,6 +473,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         #fix/limit period
         if pfix[i] == 1:
             m.lm_prob.p_value(0+i*6, orbel[0+i*6], fixed=True)
+            flt[0+i*6] = 0
         else:
             m.lm_prob.p_limit(0+i*6, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*20) #per no longer than 10x range of survey 
         
@@ -465,11 +483,13 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         #fix/limit ecc
         if circ[i] == 1:
             m.lm_prob.p_value(2+i*6, 0.0, fixed=True) 
+            flt[2+i*6] = 0
         else:
             m.lm_prob.p_limit(2+i*6, lower=0.0, upper=0.99) #ecc must be physical 
         #fix/limit omega
         if circ[i] == 1:
             m.lm_prob.p_value(3+i*6, 0.0, fixed=True) #convention
+            flt[3+i*6] = 0
         else:
             m.lm_prob.p_limit(3+i*6, lower=0.0, upper=360.0)
 
@@ -479,15 +499,19 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         #fix gamma except first
         if i > 0:
             m.lm_prob.p_value(5+i*6, 0.0, fixed=True)
+            flt[5+i*6] = 0
 
         #now include known transit effects
         if not tt[i] == 0:
             if circ[i] == 1:  #by convention tt=tp & omega=90
                 m.lm_prob.p_value(1+i*6, tt[i], fixed=True)
                 m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
+                flt[1+i*6] = 0
+                flt[3+i*6] = 0
             else:
                 tiefunc = tie_omega_function(tt, i) #how does this know what orbel is?
                 m.lm_prob.p_tie(3+i*6, tiefunc)
+                flt[3+i*6] = 0
 
     #limit polynomial terms
     for i in range(npoly):
@@ -503,7 +527,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
 
     m.solve(orbel)
    
-    return m
+    return m, flt
 
 
 def tie_omega_function(tt, i):
@@ -705,6 +729,16 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
     model = rv_drive(newpars, jdb, norbit, npoly, telvec)
 
     stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
+
+    l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
+    chisq = -0.5*np.sum((rv - model)**2/stot**2)
+
+    return l0 + chisq 
+
+def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec):
+    
+    model = rv_drive(bestpars, jdb, norbit, npoly, telvec)
+    stot = np.sqrt(srv**2 + bestpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
     chisq = -0.5*np.sum((rv - model)**2/stot**2)
