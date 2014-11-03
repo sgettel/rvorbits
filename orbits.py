@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch BIC
+# Branch master
 #
 
 
@@ -151,13 +151,16 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
     if targname == 'K00273':
 
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
-        transit = np.array([2455008.06601,0.0]) 
+        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0])
+        #transit = np.array([2455008.06601,0.0])
+        transit = np.array([2455008.06778,0.0]) 
         mstar = 1.07
         rpl = 1.82 #Me
         rple = 0.36
 
         #2 planets...       
-        guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
 
     
     if targname == 'K00069':
