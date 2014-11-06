@@ -139,6 +139,8 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
     #quart = orbel[3+norbits*6]
 
     #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
+        
+    #ttfloat = orbel[norbits*6 + npoly + ntel-1] #up to norbits terms
 
     #jitter - final term, MCMC only
     rpl = 0.0
