@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch master
+# Branch bic
 #
 
 
@@ -13,9 +13,9 @@ import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
 import utils as ut
 from pwkit import lsqmdl
+from scipy stats import norm
 
-
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,ttfloat='no'):
 
 
     if npoly > 4:
@@ -78,7 +78,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
         telvec = np.zeros_like(jdb)
-        print jdb.size
+        print jdb.size,' HARPS-N obs'
 
         jdb0 = np.copy(jdb)
         rv0 = np.copy(rv)
@@ -211,8 +211,8 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         m.print_soln()  
     
         #calc bayesian information criterion
-        bic = calc_bic(m,flt,srv)
-        print 'BIC:          ',str(bic)
+        bic0 = calc_bic(m,flt,srv)
+        print 'BIC:          ',str(bic0)
 
         #mass estimate
         mpsini = mass_estimate(m, mstar, norbits=norbits)
@@ -241,14 +241,20 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
         #call MCMC    
         if nwalkers > 0:
-            bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
-
+            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
+            plot_rv(targname,tnorm,rvnorm,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
+            mcmod = rv_drive(mcbest,tnorm,norbits,npoly,telvec)
+            mcres = mcmod - rvnorm
+            print m.resids
+            print mcres
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
             #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
 
             #print output from mass_estimate for mc
             print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
+            bic = calc_bic(m, flt, srv, mcresid=mcres)
 
+            #print 'MC BIC:          ',str(bic)
             #make a nice triangle plot
             print pnames
             f = np.squeeze(flt.nonzero())
@@ -261,22 +267,29 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
 
         
-        write_full_soln(m, targname, mpsini, bic, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
+        write_full_soln(m, targname, mpsini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
 
     return m#, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
 
-def calc_bic(m, flt, srv):
+def calc_bic(m, flt, srv, mcresid=-1):
     
     #calc BIC for LM fit, use original errors
     chisq = np.sum(m.resids**2/srv**2)
+    
     k = np.sum(flt)
     n = srv.size
+    print chisq, k, n
     bic = chisq + k*np.log(n) 
+
+    if len(np.array(mcresid).shape) > 0:
+      chisq = np.sum(mcresid**2/srv**2)
+      print chisq
+      bic = chisq + k*np.log(n)
 
     return bic
     
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1):
+def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
 
     #save uncorrected RVs, if needed
     if len(np.array(telvec).shape) > 0:
@@ -300,7 +313,10 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     if npoly > 0:
         plt.plot(tmod,poly,'g-')
     
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
+    if mc > 0:
+       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot_mc.png') 
+    else:
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
     plt.close(1)
 
     #phase at 1st period
@@ -321,7 +337,6 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     #plt.plot((tmod - guess))
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
-
 
 
 def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
@@ -700,7 +715,8 @@ if __name__ == '__main__':
 #begin MCMC setup - following emcee line-fitting demo
 def lnprior(theta, fullpars, flt, pnames, plo, phi):
     
-    
+    print fullpars
+
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
     lfloat = plo[flt.nonzero()]
@@ -709,6 +725,9 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi):
     #flat priors for all
     if (theta >= lfloat).all() and (theta < hfloat).all():
         lnpri = 0.0
+
+        #pper = norm.pdf(loc=)
+
 
         return lnpri 
     else:
@@ -725,6 +744,7 @@ def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, 
 def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
     
     newpars = np.copy(fullpars)
+    
     newpars[flt.nonzero()] = theta
     
     #jitter = newpars[-1]
@@ -876,8 +896,10 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     for i in range(ndim):
         mcpars[:,f[i]] = samples[:,i]
 
+    mcbest = np.percentile(mcpars,50, axis=0)
+
     #return m, flt, chain, samples, mcpars
-    return bestpars, pnames, flt, samples, mcpars, chain
+    return mcbest, bestpars, pnames, flt, samples, mcpars, chain
 
 
 def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1):
