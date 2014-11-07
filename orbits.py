@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch bic
+# Branch ttvar
 #
 
 
@@ -13,19 +13,22 @@ import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
 import utils as ut
 from pwkit import lsqmdl
-from scipy stats import norm
+from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,ttfloat='no'):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,ttfix=1): #,psig=0,tsig=0
 
 
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
 
 
-    transit = np.zeros(1)
+    #transit = np.zeros(1)
     telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
+    ttfix = ut.arrayify(ttfix)
+#    psig = ut.arrayify(psig)  #pfix/tfix overrides this 
+#    tsig = ut.arrayify(tsig)
     
 
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
@@ -126,43 +129,44 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
 
     #read/process parameter guesses from somewhere
-    #p = orbel[0+i*6]
-    #tp = orbel[1+i*6]
-    #ecc = orbel[2+i*6]
-    #om = orbel[3+i*6] *np.pi/180. #degrees to radians
-    #k = orbel[4+i*6]
-    #gamma = orbel[5+i*6]
+    #p = orbel[0+i*7]
+    #tp = orbel[1+i*7]
+    #ecc = orbel[2+i*7]
+    #om = orbel[3+i*7] *np.pi/180. #degrees to radians
+    #k = orbel[4+i*7]
+    #gamma = orbel[5+i*7]
+    #tt = orbel[6+i*7]
 
-    #dvdt = orbel[0+norbits*6] - optional polynomial fit
-    #quad = orbel[1+norbits*6]
-    #cubic = orbel[2+norbits*6]
-    #quart = orbel[3+norbits*6]
+    #dvdt = orbel[0+norbits*7] - optional polynomial fit
+    #quad = orbel[1+norbits*7]
+    #cubic = orbel[2+norbits*7]
+    #quart = orbel[3+norbits*7]
 
-    #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
+    #offset = orbel[norbits*7 + npoly + (0-3)] #up to 4 offset terms
         
-    #ttfloat = orbel[norbits*6 + npoly + ntel-1] #up to norbits terms
-
     #jitter - final term, MCMC only
     rpl = 0.0
 
     if targname == 'HD209458':
         guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
-        transit = np.array([2452826.628514]) 
+        #transit = np.array([2452826.628514]) 
         mstar = 1.0
     
     if targname == 'K00273':
 
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
-        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06601, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
+        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06778,1.1889011, 0.010, 0.0])#, 0.0])
         #transit = np.array([2455008.06601,0.0])
-        transit = np.array([2455008.06778,0.0]) 
+        #transit = np.array([2455008.06778,0.0]) 
+        psig = np.array([2.6e-5,0.0])
+        ttsig = np.array([0.00085,0.0])
         mstar = 1.07
         rpl = 1.82 #Me
         rple = 0.36
 
         #2 planets...       
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
-        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0, 2455008.06601,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0, 2455008.06778,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0,0.0])
 
     
     if targname == 'K00069':
@@ -172,12 +176,14 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
     
     ip = np.arange(norbits)
-    guesspars[1+ip*6] -= epoch
+    guesspars[1+ip*7] -= epoch
+    guesspars[6+ip*7] -= epoch
+    #for i in range(transit.size):  
+    #    if not transit[i] == 0.0:
+    #        transit[i] -= epoch 
+    #        #print 'set transit time: ', transit
 
-    for i in range(transit.size):  
-        if not transit[i] == 0.0:
-            transit[i] -= epoch 
-            #print 'set transit time: ', transit
+    
 
     #append offsets if needed
     if ntel > 1:
@@ -197,7 +203,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
                 continue
             print pguess[i]
             pfix = [1,1]
-            m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
+            m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,ttfix=ttfix,epoch=epoch,pfix=pfix,norbits=norbits,psig=psig,ttsig=ttsig)
             m.print_soln()  
             mpsini = mass_estimate(m, mstar, norbits=norbits)
             print 'mp*sin(i):         ',str(mpsini)
@@ -206,7 +212,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         return m, pguess, outp, outchisq
 
     else:
-        m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec)
+        m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,ttfix=ttfix,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec,psig=psig,ttsig=ttsig)
 
     
         #display initial fit - want to show fixed params too
@@ -231,16 +237,16 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         par0 = np.copy(m.params)
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
-            print 'offset: ', m.params[i+norbits*6+npoly]
-            rvp[a] -= m.params[i+norbits*6+npoly]
-            m.params[i+norbits*6+npoly] = 0
+            print 'offset: ', m.params[i+norbits*7+npoly]
+            rvp[a] -= m.params[i+norbits*7+npoly]
+            m.params[i+norbits*7+npoly] = 0
 
 
         #make plots
         plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
 
-
+##LEFT OFF HERE
         #call MCMC    
         if nwalkers > 0:
             mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
@@ -322,8 +328,8 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.close(1)
 
     #phase at 1st period
-    pars = m.params[0:6]  #for model 
-    pars[6:] = 0 #select first planet only
+    pars = m.params[0:7]  #for model 
+    pars[7:] = 0 #select first planet only
         
     parst = np.copy(m.params)
     parst[4] = 0.0 #other planets only
@@ -418,33 +424,22 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     
     ip = np.array(range(norbits))
     
-    pers = m.params[ip*6]
-    eccs = m.params[ip*6+2]
-    amps = m.params[ip*6+4]
+    pers = m.params[ip*7]
+    eccs = m.params[ip*7+2]
+    amps = m.params[ip*7+4]
     
     #mass estimate
     fm = (1 - eccs*eccs)**(1.5)*amps**3*(pers*86400.0)/(2*np.pi*G) #kg
     mpsini = ((mstar*msun)**2*fm)**(1./3.)/mearth
 
-    #calculate error on mass if bootpar array is input
-    if len(np.array(bootpar).shape) > 0:
-
-        #print bootpar.shape, m.params.shape
-        mparr_all = np.zeros((norbits,bootpar.shape[0]))
-
-        for i in ip:
-            fmarr = (1 - bootpar[:,i*6+2]**2)**(1.5)*bootpar[:,i*6+4]**3*(bootpar[:,i*6]*86400.0)/(2.0*np.pi*G)
-            mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
-            mparr_all[i,:] = mparr
-
-        return mpsini, mparr_all
+    
 
    # mass estimate for mcmc
     if len(np.array(mcpar).shape) > 0:
         mparr_mc = np.zeros((norbits,mcpar.shape[0]))
 
         for i in ip:
-            fmarr = (1 - mcpar[:,2+i*6]**2)**(1.5)*mcpar[:,i*6+4]**3*(mcpar[:,i*6]*86400.0)/(2.0*np.pi*G)
+            fmarr = (1 - mcpar[:,2+i*7]**2)**(1.5)*mcpar[:,i*7+4]**3*(mcpar[:,i*7]*86400.0)/(2.0*np.pi*G)
             mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
             mparr_mc[i,:] = mparr
         return mpsini, mparr_mc
@@ -465,100 +460,131 @@ def density_estimate(mpsini,rpl,mcpar=-1,rple=-1):
 
    
 
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1):
-
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttfix=1,epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=0,ttsig=0):
+    
     ip = np.arange(norbits)
-
+    
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
-    
+        
     if param_names == 0: 
-        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma']*norbits
+        param_names = ['Per', 'Tp', 'ecc', 'om', 'K1', 'gamma', 'TT']*norbits
         poly_names = ['dvdt','quad','cubic','quart']
         param_names.extend(poly_names[:npoly]) 
         if ntel > 1:
             off_names = ['offset']*(ntel-1)
             param_names.extend(off_names)
-
+            
     flt = np.ones_like(orbel) #Free param? Turn off individually
-
+    
     m = lsqmdl.Model(None, rv, 1./srv) 
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
-
-    #print pfix, ' = pfix'
+    
+    
     #make some reasonable limits - don't need the loop?
     for i in range(norbits):
-
-        #apply normal limits first
-        #fix/limit period
-        if pfix[i] == 1:
-            m.lm_prob.p_value(0+i*6, orbel[0+i*6], fixed=True)
-            flt[0+i*6] = 0
+        
+        if pfix[i] == 1: #fix/limit period
+            m.lm_prob.p_value(0+i*7, orbel[0+i*7], fixed=True)
+            flt[0+i*7] = 0
+        elif not psig[i] == 0: #use Kepler error bars
+            m.lm_prob.p_limit(0+i*7, lower=orbel[0+i*7] - psig[i]*5, upper=orbel[0+i*7] + psig[i]*5)
         else:
-            m.lm_prob.p_limit(0+i*6, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*20) #per no longer than 10x range of survey 
+            m.lm_prob.p_limit(0+i*7, lower=0.1, upper=(np.max(jdb)-np.min(jdb))*20) #per no longer than 10x range of survey 
         
         #limit Tp
-        m.lm_prob.p_limit(1+i*6, lower=orbel[1+i*6]-orbel[0+i*6]/2., upper=orbel[1+i*6]+orbel[0+i*6]/2.) #T0 within one period guess
-
+        m.lm_prob.p_limit(1+i*7, lower=orbel[1+i*7]-orbel[0+i*7]/2., upper=orbel[1+i*7]+orbel[0+i*7]/2.) #T0 within one period guess
+        
         #fix/limit ecc
         if circ[i] == 1:
-            m.lm_prob.p_value(2+i*6, 0.0, fixed=True) 
-            flt[2+i*6] = 0
+            m.lm_prob.p_value(2+i*7, 0.0, fixed=True) 
+            flt[2+i*7] = 0
         else:
-            m.lm_prob.p_limit(2+i*6, lower=0.0, upper=0.99) #ecc must be physical 
+            m.lm_prob.p_limit(2+i*7, lower=0.0, upper=0.99) #ecc must be physical 
         #fix/limit omega
         if circ[i] == 1:
-            m.lm_prob.p_value(3+i*6, 0.0, fixed=True) #convention
-            flt[3+i*6] = 0
+            m.lm_prob.p_value(3+i*7, 0.0, fixed=True) #convention
+            flt[3+i*7] = 0
         else:
-            m.lm_prob.p_limit(3+i*6, lower=0.0, upper=360.0)
+            m.lm_prob.p_limit(3+i*7, lower=0.0, upper=360.0)
 
         #limit K
-        m.lm_prob.p_limit(4+i*6, lower=0.0, upper=1.0e5) #K must be physical
+        m.lm_prob.p_limit(4+i*7, lower=0.0, upper=1.0e5) #K must be physical
   
         #fix gamma except first
         if i > 0:
-            m.lm_prob.p_value(5+i*6, 0.0, fixed=True)
-            flt[5+i*6] = 0
+            m.lm_prob.p_value(5+i*7, 0.0, fixed=True)
+            flt[5+i*7] = 0
 
-        #now include known transit effects
-        if not tt[i] == 0:
+        #fix/limit transit time
+        if ttfix[i] == 1:
+            m.lm_prob.p_value(6+i*7, orbel[6+i*7], fixed=True)
+            flt[6+i*7] = 0
+        elif not ttsig[i] == 0:
+            m.lm_prob.p_limit(6+i*7, lower=orbel[6+i*7] - ttsig[i]*5, upper=orbel[6+i*7] + ttsig[i]*5)
+        elif ttfix[i] == -1:
+            m.lm_prob.p_value(6+i*7, 0, fixed=True) #param not used 
+            flt[6+i*7] = 0
+         #   m.lm_prob.p_limit(6+i*7, lower=, upper=) #else limit?
+
+        #now include other transit effects
+        if ttfix[i] == 1:
             if circ[i] == 1:  #by convention tt=tp & omega=90
-                m.lm_prob.p_value(1+i*6, tt[i], fixed=True)
-                m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
-                flt[1+i*6] = 0
-                flt[3+i*6] = 0
+                m.lm_prob.p_value(1+i*7,orbel[6+i*7] , fixed=True)
+                m.lm_prob.p_value(3+i*7, 90.0, fixed=True)
+                flt[1+i*7] = 0
+                flt[3+i*7] = 0
             else:
-                tiefunc = tie_omega_function(tt, i) #how does this know what orbel is?
-                m.lm_prob.p_tie(3+i*6, tiefunc)
-                flt[3+i*6] = 0
+                tiefunc = tie_omega_function(i) #how does this know what orbel is?
+                m.lm_prob.p_tie(3+i*7, tiefunc)
+                flt[3+i*7] = 0
+
+        elif not ttsig[i] == 0: #if tt floats with constraints
+            if circ[i] == 1:
+                m.lm_prob.p_value(3+i*7, 90.0, fixed=True)  #omega still = 90
+                flt[3+i*7] = 0
+                
+                tiefunc2 = tie_tp_func(i) #Tp = TT
+                m.lm_prob.p_tie(1+i*7,tiefunc2)
+                flt[1+i*7] = 0
+            else:
+                tiefunc = tie_omega_function(i) #how does this know what orbel is?
+                m.lm_prob.p_tie(3+i*7, tiefunc)
+                flt[3+i*7] = 0
+        #else - need a free floating transit case?
 
     #limit polynomial terms
     for i in range(npoly):
         
-        m.lm_prob.p_limit(i+norbits*6, lower=-1e6, upper=1e6) #dvdt and higher
+        m.lm_prob.p_limit(i+norbits*7, lower=-1e6, upper=1e6) #dvdt and higher
 
 
     #limit offset terms
     for i in range(ntel-1):
-        m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
+        m.lm_prob.p_limit(i + norbits*7 + npoly, lower=-1e6, upper=1e6)
 
     
-
+    print flt
     m.solve(orbel)
    
     return m, flt
 
-
-def tie_omega_function(tt, i):
+def tie_tp_func(i):
+    def calc_tp(orbel):
+        tp = orbel[6+i*7] # = tt
+        return tp
+    return calc_tp
+        
+def tie_omega_function(i):
 
     def calculate_omega(orbel):
         
-        p = orbel[0+i*6]
-        tp = orbel[1+i*6]
-        ecc = orbel[2+i*6]
+        p = orbel[0+i*7]
+        tp = orbel[1+i*7]
+        ecc = orbel[2+i*7]
+        tt = orbel[6+i*7]
 
-        theta_tt = calc_true_anomaly(p, tp, ecc, tt[i]) #in radians
+        theta_tt = calc_true_anomaly(p, tp, ecc, tt) #in radians
         omega = (np.pi/2.0 - theta_tt)*180.0/np.pi
          
         if omega < 0:    
@@ -582,12 +608,12 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
     phase = np.zeros((rv.size,norbits))
     
     for i in range(norbits):  
-        p = orbel[0+i*6]
-        tp = orbel[1+i*6]
-        ecc = orbel[2+i*6]
-        om = orbel[3+i*6] *np.pi/180. #degrees to radians
-        k = orbel[4+i*6]
-        gamma = orbel[5+i*6]
+        p = orbel[0+i*7]
+        tp = orbel[1+i*7]
+        ecc = orbel[2+i*7]
+        om = orbel[3+i*7] *np.pi/180. #degrees to radians
+        k = orbel[4+i*7]
+        gamma = orbel[5+i*7]
 
 
 
@@ -623,7 +649,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
 
     #now add polynomial
     for i in range(npoly):
-        rv = rv + orbel[i+norbits*6]*(t - epoch)**(i+1)
+        rv = rv + orbel[i+norbits*7]*(t - epoch)**(i+1)
    
     #now add offsets
     tels = np.unique(telvec)
@@ -631,7 +657,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
         #print tels[i]
         a = np.squeeze(np.where(telvec == tels[i+1]))
         #print a.size
-        rv[a] += orbel[i+norbits*6+npoly]
+        rv[a] += orbel[i+norbits*7+npoly]
 
     return rv
 
