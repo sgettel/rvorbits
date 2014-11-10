@@ -22,7 +22,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         print 'Must have <= 4th order polynomial'
 
 
-    #transit = np.zeros(1)
+    transit = np.zeros(1)
     telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
@@ -157,7 +157,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06601, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
         guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06778,1.1889011, 0.010, 0.0])#, 0.0])
         #transit = np.array([2455008.06601,0.0])
-        #transit = np.array([2455008.06778,0.0]) 
+        transit = np.array([2455008.06778,0.0]) 
         psig = np.array([2.6e-5,0.0])
         ttsig = np.array([0.00085,0.0])
         mstar = 1.07
@@ -166,7 +166,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
         #2 planets...       
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0, 2455008.06601,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
-        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0, 2455008.06778,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0,0.0])
+        #guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0, 2455008.06778,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0,0.0])
 
     
     if targname == 'K00069':
@@ -178,9 +178,9 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
     ip = np.arange(norbits)
     guesspars[1+ip*7] -= epoch
     guesspars[6+ip*7] -= epoch
-    #for i in range(transit.size):  
-    #    if not transit[i] == 0.0:
-    #        transit[i] -= epoch 
+    for i in range(transit.size):  
+        if not transit[i] == 0.0:
+            transit[i] -= epoch 
     #        #print 'set transit time: ', transit
 
     
@@ -743,7 +743,7 @@ if __name__ == '__main__':
 #begin MCMC setup - following emcee line-fitting demo
 def lnprior(theta, fullpars, flt, pnames, plo, phi):
     
-    print fullpars
+   # print fullpars
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
@@ -884,6 +884,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
                 bestpars[3+i*7] = 90.0
             #else:
                 #tie omega to ecc
+        
 
     #limit polynomial terms
     for i in range(npoly):
