@@ -17,20 +17,15 @@ from scipy.stats import norm
 
 def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,ttfix=1): #,psig=0,tsig=0
 
-
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
-
 
     #transit = np.zeros(1)
     telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
     ttfix = ut.arrayify(ttfix)
-#    psig = ut.arrayify(psig)  #pfix/tfix overrides this 
-#    tsig = ut.arrayify(tsig)
-    
-
+  
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
     	home = '/Users/Sara/'
     else:
@@ -146,6 +141,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         
     #jitter - final term, MCMC only
     rpl = 0.0
+    ip = np.arange(norbits)
 
     if targname == 'HD209458':
         guesspars = np.array([3.524733, 2452826.628514, 0.0, 336.5415, 85.49157+10, -1.49-10])#HD209458
@@ -154,19 +150,23 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
     
     if targname == 'K00273':
 
-        ##guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06601, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
-        #guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06778,1.1889011, 0.010, 0.0])#, 0.0])
+        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06601, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
+        guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 1.7358979, -3398.0498, 2455008.06787,1.1889011, 0.010, 0.0])#, 0.0])
         #transit = np.array([2455008.06601,0.0])
         #transit = np.array([2455008.06778,0.0]) 
-        psig = np.array([2.6e-5,0.0])
+        
+        #2 planets...       
+        ##guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0, 2455008.06601,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        #guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0, 2455008.06787,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0,0.0])
+
+        ploc = guesspars[0+ip*7] #mean of prior
+        tloc = guesspars[6+ip*7]
+        psig = np.array([2.6e-5,0.0]) #stdev of prior
         ttsig = np.array([0.00085,0.0])
+
         mstar = 1.07
         rpl = 1.82 #Me
         rple = 0.36
-
-        #2 planets...       
-        ##guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0, 2455008.06601,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
-        guesspars = np.array([10.573738, 2455008.06778, 0.0, 90.0, 2.2, -16.0, 2455008.06778,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0,0.0])
 
     
     if targname == 'K00069':
@@ -174,10 +174,11 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         transit = np.array([2454944.29227])
         mstar = 0.887
 
-    
-    ip = np.arange(norbits)
+
     guesspars[1+ip*7] -= epoch
     guesspars[6+ip*7] -= epoch
+    tloc -= epoch
+
     #for i in range(transit.size):  
     #    if not transit[i] == 0.0:
     #        transit[i] -= epoch 
@@ -249,7 +250,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
         #call MCMC    
         if nwalkers > 0:
-            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,ttsig=ttsig,ttfix=ttfix)
+            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,ttsig=ttsig,ttfix=ttfix,ploc=ploc,tloc=tloc)
 
             plot_rv(targname,tnorm,rvnorm,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
             mcmod = rv_drive(mcbest,tnorm,norbits,npoly,telvec)
@@ -262,7 +263,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
             #print output from mass_estimate for mc
             print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
             bic = calc_bic(m, flt, srv, mcresid=mcres)
-
+            #calc_bic_mc(bestpars, flt, jdb, rv, srv, norbit, npoly, telvec)
             print 'MC BIC:          ',str(bic)
             #make a nice triangle plot
             print pnames
@@ -290,13 +291,24 @@ def calc_bic(m, flt, srv, mcresid=-1):
     print chisq, k, n
     bic = chisq + k*np.log(n) 
 
-    if len(np.array(mcresid).shape) > 0:
+    if len(np.array(mcresid).shape) > 0: #NO
       chisq = np.sum(mcresid**2/srv**2)
       print chisq
       bic = chisq + k*np.log(n)
-
+     
     return bic
+ 
+def calc_bic_mc(bestpars, flt, jdb, rv, srv, norbit, npoly, telvec):
+
+    lnl = lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec)
+
+    k = np.sum(flt)
+    n = srv.size
     
+
+    #BIC = -2*lnlike + k*np.log(n)
+
+
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
 
@@ -830,9 +842,10 @@ if __name__ == '__main__':
 
 
 #begin MCMC setup - following emcee line-fitting demo
-def lnprior(theta, fullpars, flt, pnames, plo, phi,psig,ttsig,ttfix,circ):
-    
-    #print fullpars
+def lnprior(theta, fullpars, flt, pnames, plo, phi,psig,ttsig,ttfix,circ,ploc,tloc):
+    newpars = np.copy(fullpars)
+    newpars[flt.nonzero()] = theta
+    #print newpars
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
@@ -843,18 +856,27 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi,psig,ttsig,ttfix,circ):
     if (theta >= lfloat).all() and (theta < hfloat).all():
         lnpri = 0.0
 
-        
-        #pper = norm.pdf(loc=)
+        plim = np.squeeze(psig.nonzero())
+        for i in range(plim.size):
+            x = newpars[0+i*7]
+            priper = norm.pdf(x,loc=ploc[i],scale=5*psig[i]) 
+            lnpri += np.log(priper)
 
+        tlim = np.squeeze(ttsig.nonzero())
+        for i in range(tlim.size):
+            x = newpars[6+i*7]
+            pritt = norm.pdf(x,loc=tloc[i],scale=5*ttsig[i]) 
+            lnpri += np.log(pritt)
 
+        #print priper,pritt
         return lnpri 
     else:
         
         return -np.inf
     
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, telvec,psig,ttsig,ttfix,circ):
-    lp = lnprior(theta, fullpars, flt, pnames, plo, phi,psig,ttsig,ttfix,circ)
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, telvec,psig,ttsig,ttfix,circ,ploc,tloc):
+    lp = lnprior(theta, fullpars, flt, pnames, plo, phi,psig,ttsig,ttfix,circ,ploc,tloc)
     if not np.isfinite(lp):
         return -np.inf
     return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec,ttsig,ttfix,circ)
@@ -886,12 +908,14 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec):
 
     return l0 + chisq 
 
-def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1,nsteps=1000,psig=0,ttsig=0,ttfix=1): 
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1,nsteps=1000,psig=0,ttsig=0,ttfix=1,ploc=0,tloc=0): 
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,0.5) #add placeholder for jitter
     pnames = np.copy(m.pnames)
     pnames = np.append(pnames,'jitter')
+
+    
 
     #p = orbel[0+i*7]
     #tp = orbel[1+i*7]
@@ -1018,10 +1042,10 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     
     print 'MCMC params: ',pnames[f] 
     print varpars
-    #print plo[f]
-    #print phi[f]
+    print plo[f]
+    print phi[f]
 
-    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,ttfix=ttfix,psig=psig,ttsig=ttsig,circ=circ)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,ttfix=ttfix,psig=psig,ttsig=ttsig,circ=circ,ploc=ploc,tloc=tloc)
   
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -1039,13 +1063,13 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     return mcbest, bestpars, pnames, flt, samples, mcpars, chain
 
 
-def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=0,ttsig=0,ttfix=1,circ=0):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=0,ttsig=0,ttfix=1,circ=0,ploc=0,tloc=0):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-6*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,ttsig,ttfix,circ))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,ttsig,ttfix,circ,ploc,tloc))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
