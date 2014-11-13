@@ -220,7 +220,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         m.print_soln()  
     
         #calc bayesian information criterion
-        bic0 = calc_bic(m,flt,srv)
+        bic0 = calc_bic_lm(m,flt,srv)
         print 'BIC:          ',str(bic0)
 
         #mass estimate
@@ -233,37 +233,44 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
         #correct offset before plotting
         tels = np.unique(telvec)
-        #rvp = np.zeros_like(rvnorm)
-        rvp = rvnorm
+        rvp = np.copy(rvnorm)
         par0 = np.copy(m.params)
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
             print 'offset: ', m.params[i+norbits*6+npoly]
             rvp[a] -= m.params[i+norbits*6+npoly]
             m.params[i+norbits*6+npoly] = 0
+        #print rvp - rvnorm
 
-
-        #make plots
-        plot_rv(targname,tnorm,rvnorm,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
+        #make plots & restore offset
+        plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
 
 
         #call MCMC    
         if nwalkers > 0:
             mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
-            plot_rv(targname,tnorm,rvnorm,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
-            mcmod = rv_drive(mcbest,tnorm,norbits,npoly,telvec)
-            mcres = mcmod - rvnorm
-            print m.resids
-            print mcres
+
+            #correct offset before plotting
+            rvp = np.copy(rvnorm)
+            par0 = np.copy(mcbest)
+            for i in range(ntel-1):
+                a = np.squeeze(np.where(telvec == tels[i+1]))
+                print 'offset: ', mcbest[i+norbits*6+npoly]
+                rvp[a] -= mcbest[i+norbits*6+npoly]
+                mcbest[i+norbits*6+npoly] = 0
+
+            plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
+            mcbest = par0
+
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
             #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
 
             #print output from mass_estimate for mc
             print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
-            bic = calc_bic(m, flt, srv, mcresid=mcres)
+            bic = calc_bic_mc(mcbest, flt, tnorm, rvnorm, nsrv, norbits, npoly, telvec)
 
-            #print 'MC BIC:          ',str(bic)
+            print 'MC BIC:          ',str(bic)
             #make a nice triangle plot
             print pnames
             f = np.squeeze(flt.nonzero())
@@ -280,7 +287,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
     return m#, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
 
-def calc_bic(m, flt, srv, mcresid=-1):
+def calc_bic_lm(m, flt, srv):
     
     #calc BIC for LM fit, use original errors
     chisq = np.sum(m.resids**2/srv**2)
@@ -290,19 +297,22 @@ def calc_bic(m, flt, srv, mcresid=-1):
     print chisq, k, n
     bic = chisq + k*np.log(n) 
 
-    if len(np.array(mcresid).shape) > 0:
-      chisq = np.sum(mcresid**2/srv**2)
-      print chisq
-      bic = chisq + k*np.log(n)
-
     return bic
     
+def calc_bic_mc(mcbest,flt,jdb,rv,srv,norbit,npoly,telvec):
+  
+    k = np.sum(flt)
+    n = srv.size
+  
+    lnl = lnlike_base(mcbest, jdb, rv, srv, norbit, npoly, telvec)
+    bic = -2*lnl + k*np.log(n)
+
+    return bic
+     
+
 
 def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
 
-    #save uncorrected RVs, if needed
-    if len(np.array(telvec).shape) > 0:
-        ntel = np.unique(telvec).size
 
    
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
@@ -344,7 +354,10 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
     #plt.plot((tmod - guess))
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
+    if mc > 0:
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot_mc.png')
+    else:
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
 
 
@@ -373,7 +386,9 @@ def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1
     
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
-
+        for i in range(ntel-1):
+            a = np.squeeze(np.where(telvec == tels[i+1]))
+            f.write('offset: '+str(m.params[i+norbits*6+npoly])+'\n')
     
     if len(np.array(mcpars).shape) > 0: #print MCMC errs
         for i in range(norbits):
