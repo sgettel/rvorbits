@@ -234,35 +234,35 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         #correct offset before plotting
         tels = np.unique(telvec)
         rvp = np.copy(rvnorm)
+        
         par0 = np.copy(m.params)
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
             print 'offset: ', m.params[i+norbits*6+npoly]
             rvp[a] -= m.params[i+norbits*6+npoly]
             m.params[i+norbits*6+npoly] = 0
-        #print rvp - rvnorm
-
+        
         #make plots & restore offset
         plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
         m.params = par0
-
-
+       
         #call MCMC    
         if nwalkers > 0:
             mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps)
 
             #correct offset before plotting
             rvp = np.copy(rvnorm)
-            par0 = np.copy(mcbest)
+            #print 'mcbest:', mcbest
+            par1 = np.copy(mcbest)
             for i in range(ntel-1):
                 a = np.squeeze(np.where(telvec == tels[i+1]))
-                print 'offset: ', mcbest[i+norbits*6+npoly]
+                print 'MC offset: ', mcbest[i+norbits*6+npoly]
                 rvp[a] -= mcbest[i+norbits*6+npoly]
                 mcbest[i+norbits*6+npoly] = 0
-
+            
             plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
-            mcbest = par0
-
+            mcbest = par1
+            
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
             #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
 
@@ -310,18 +310,20 @@ def calc_bic_mc(mcbest,flt,jdb,rv,srv,norbit,npoly,telvec):
     return bic
      
 
+def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
 
-def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
+    if mc > 0:
+        usepars = np.copy(gpars) #this is mcbest...
+    else:
+        usepars = np.copy(m.params)
 
-
-   
+    print 'plot pars:', usepars
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
-    
-    model_final = rv_drive(m.params,tmod,norbits,npoly,telvec)
+    model_final = rv_drive(usepars,tmod,norbits,npoly,telvec)
     
     if npoly > 0:
-        parst =  np.copy(m.params)
+        parst =  np.copy(usepars) 
         parst[4] = 0.0
         poly = rv_drive(parst,tmod,norbits,npoly,telvec)
 
@@ -339,10 +341,10 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     plt.close(1)
 
     #phase at 1st period
-    pars = m.params[0:6]  #for model 
+    pars = usepars[0:6]  #for model 
     pars[6:] = 0 #select first planet only
         
-    parst = np.copy(m.params)
+    parst = np.copy(usepars)
     parst[4] = 0.0 #other planets only
     parst[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
@@ -350,6 +352,7 @@ def plot_rv(targname,jdb,rv,srv,guesspars,m,nmod=1000,home='/home/sgettel/', nor
     rvt = rv_drive(parst,jdb,norbits,npoly,telvec)   
     telvec = np.zeros_like(tmod)
 
+    #Something wrong here for MC...
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
@@ -385,6 +388,7 @@ def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1
         f.write('mp*sin(i): '+str(mpsini[i])+'\n')
     
     if len(np.array(telvec).shape) > 0:
+        tels = np.unique(telvec)
         ntel = np.unique(telvec).size
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
@@ -908,7 +912,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     ndim = varpars.size
     
     print 'MCMC params: ',pnames[f] 
-    print varpars
+    print 'guesses from LM: ',varpars
 
     chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps)
   
