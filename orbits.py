@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,ttfloat='no'):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no'):
 
 
     if npoly > 4:
@@ -182,16 +182,21 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
 
     guesspars[1+ip*6] -= epoch
 
-
-    for i in range(transit.size):  
-        if not transit[i] == 0.0:
-            transit[i] -= epoch 
-            #print 'set transit time: ', transit
-
     #append offsets if needed
     if ntel > 1:
         guesspars = np.append(guesspars,offset)
- 
+
+    #append transit time if needed
+    for i in range(transit.size):  
+        if not transit[i] == 0.0:
+            transit[i] -= epoch 
+
+        #add all by default, turn them off in LM fitter
+        if ttfloat == 'yes':
+            print 'Letting transit time/s float'
+            guesspars = np.append(guesspars,transit[i]) 
+
+
     if outer_loop == 'yes':
         #brute force search of outer period
         nboot = 0
@@ -250,7 +255,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
        
         #call MCMC    
         if nwalkers > 0:
-            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig)
+            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,ttfloat=ttfloat,ttsig=ttsig)
 
             #correct offset before plotting
             rvp = np.copy(rvnorm)
@@ -494,7 +499,24 @@ def density_estimate(mpsini,rpl,mcpar=-1,rple=-1):
 
    
 
-def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1):
+def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.zeros(1),epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1,ttfloat='no',ttsig=-1):
+    #p = orbel[0+i*6]
+    #tp = orbel[1+i*6]
+    #ecc = orbel[2+i*6]
+    #om = orbel[3+i*6] *np.pi/180. #degrees to radians
+    #k = orbel[4+i*6]
+    #gamma = orbel[5+i*6]
+
+    #dvdt = orbel[0+norbits*6] - optional polynomial fit
+    #quad = orbel[1+norbits*6]
+    #cubic = orbel[2+norbits*6]
+    #quart = orbel[3+norbits*6]
+
+    #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
+        
+    #ttfloat = orbel[norbits*6 + npoly + ntel-1 + 0-norbits] norbits terms
+
+    print orbel
 
     ip = np.arange(norbits)
 
@@ -508,8 +530,11 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         if ntel > 1:
             off_names = ['offset']*(ntel-1)
             param_names.extend(off_names)
+        if ttfloat == 'yes':
+            tr_names = ['transit']*norbits
+            param_names.extend(tr_names)
 
-    flt = np.ones_like(orbel) #Free param? Turn off individually
+    flt = np.ones_like(orbel) #Free param, Turn off individually
 
     m = lsqmdl.Model(None, rv, 1./srv) 
     m.set_func(rv_drive,param_names, args=(jdb,norbits,npoly,telvec) )
@@ -552,7 +577,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
             m.lm_prob.p_value(5+i*6, 0.0, fixed=True)
             flt[5+i*6] = 0
 
-        #now include known transit effects
+        #now include fixed transit time effects
         if not tt[i] == 0:
             if circ[i] == 1:  #by convention tt=tp & omega=90
                 m.lm_prob.p_value(1+i*6, tt[i], fixed=True)
@@ -575,11 +600,41 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
     
+    #transit time must be either fixed or constrained with ttsig
+    #allow for variable transit time
+    if ttfloat == 'yes':
+        for i in range(norbits):
+            ind = i + norbits*6 + npoly + ntel-1
+            
+            if ttsig[i] > 0:        #let float with limited range
+                
+                m.lm_prob.p_limit(ind, lower=orbel[ind]-5*ttsig[i], upper=orbel[ind]+5*ttsig[i])
+                #now tie other parameters...
+                if circ[i] == 1: #by convention tt=tp & omega=90
+                    m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
+                    tiefunc2 = tie_tp_function(tt,i)
+                    m.lm_prob.p_tie(1+i*6, tiefunc2)
+                    flt[1+i*6] = 0
+                    flt[3+i*6] = 0
+                else: #tie omega to tt & tp
+                    tiefunc  = tie_omega_function(tt,i)
+                    m.lm_prob.p_tie(3+i*6, tiefunc)
+                    flt[3+i*6] = 0
+                
+            else:  #fix at original value
+                m.lm_prob.p_value(ind, tt[i], fixed=True)
+    #else test that you have the right number of orbit params...
+    
 
     m.solve(orbel)
    
     return m, flt
 
+def tie_tp_function(tt,i):
+    def calculate_tp(orbel):
+
+        tp = tt[i]
+        return tp
 
 def tie_omega_function(tt, i):
 
@@ -620,9 +675,7 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
         k = orbel[4+i*6]
         gamma = orbel[5+i*6]
 
-
-
-
+        #print tp, om
         #Error checking
         if p < 0 or ecc < 0 or ecc >= 1 or k < 0:
             print 'Bad inputs to rv_drive'
@@ -665,6 +718,105 @@ def rv_drive(orbel, t, norbits, npoly, telvec):
         rv[a] += orbel[i+norbits*6+npoly]
 
     return rv
+
+def rv_drive_mc(orbel, t, norbits, npoly, telvec, tt, ttsig, ttfloat,circ):
+    #From rv_drive.pro in RVLIN by JTW
+
+   
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
+
+    rv = np.zeros_like(t)
+   
+    phase = np.zeros((rv.size,norbits))
+    
+    for i in range(norbits):  
+        p = orbel[0+i*6]
+        tp = orbel[1+i*6]
+        ecc = orbel[2+i*6]
+        om = orbel[3+i*6] *np.pi/180. #degrees to radians
+        k = orbel[4+i*6]
+        gamma = orbel[5+i*6]
+        
+        #print tp, om
+
+        #if transit time set
+        if not tt[i] == 0:
+            #if fixed, use tt[i] else use orbel[tind]
+            if ttfloat == 'no': #use default value
+                if circ[i] == 1:
+                    tp = tt[i]
+                    om = 90.0*np.pi/180.0
+                else: 
+                    theta_tt = calc_true_anomaly(p, tp, ecc, tt[i])
+                    om = (np.pi/2.0 - theta_tt)*180.0/np.pi
+
+                    om = om % 360.0
+                    #if om < 0:    
+                    #    om += 360.0
+                    #if om > 360.0:  #do something smarter here...
+                    #    om -= 360.0
+            
+            elif ttfloat == 'yes' and ttsig[i] > 0: #use value from orbel
+                tind = i + norbits*6 + npoly + ntel-1
+                tti = orbel[tind]
+                if circ[i] == 1:
+                    tp = tti
+                    om = 90.0*np.pi/180.0
+                else:
+                    theta_tt = calc_true_anomaly(p, tp, ecc, tti)
+                    om = (np.pi/2.0 - theta_tt)*180.0/np.pi
+                    om = om % 360.0
+
+                    #if om < 0:    
+                    #    om += 360.0
+                    #if om > 360.0:  #do something smarter here...
+                    #    om -= 360.0
+        #print tp, om
+                        
+        #Error checking
+        if p < 0 or ecc < 0 or ecc >= 1 or k < 0:
+            print 'Bad inputs to rv_drive'
+            print p, ecc, k
+            if p < 0:
+                p = 1e-2
+            if ecc < 0:
+                ecc = 0
+            if ecc >= 1:
+                ecc = 0.99
+            if k < 0:
+                k = 1e-2
+     
+        theta = calc_true_anomaly(p, tp, ecc, t)
+
+
+        phase0 = theta + om - np.pi/2.0
+        under = np.squeeze(np.where(phase0 < -np.pi)) 
+        phase0[under] += np.pi
+        over = np.squeeze(np.where(phase0 >= np.pi))
+        phase0[over] -= np.pi
+        
+        phase[:,i] = phase0
+
+        #calculate radial velocity
+        epoch = 0.0 #Yes, epoch corrected elsewhere
+            
+        rv = rv + k*(np.cos(theta + om) + ecc*np.cos(om)) + gamma 
+
+    #now add polynomial
+    for i in range(npoly):
+        rv = rv + orbel[i+norbits*6]*(t - epoch)**(i+1)
+   
+    #now add offsets
+    tels = np.unique(telvec)
+    for i in range(ntel-1):
+        #print tels[i]
+        a = np.squeeze(np.where(telvec == tels[i+1]))
+        #print a.size
+        rv[a] += orbel[i+norbits*6+npoly]
+
+    return rv
+
 
 def calc_true_anomaly(p, tp, ecc, t):
     #first calculate the approximate eccentric anomaly, E1, from the mean anomaly, M
@@ -746,10 +898,12 @@ if __name__ == '__main__':
 
 
 #begin MCMC setup - following emcee line-fitting demo
-def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig):
+def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig, tt, ttsig, ttfloat,npoly,telvec):
     
 
     #print fullpars
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
 
     #figure out which params are varied and the associated limits
     pfloat = pnames[flt.nonzero()]
@@ -764,8 +918,14 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig):
             if psig[i] > 0:
                 x = fullpars[0+i*6]
                 prper = norm.pdf(x,loc=porig[i],scale=psig[i]*3)*psig[i]*3
-
                 lnpri += np.log(prper)
+
+            if ttfloat == 'yes':
+                if ttsig[i] > 0:
+                    tind = i + norbit*6 + npoly + ntel-1
+                    x = fullpars[tind]
+                    prtt = norm.pdf(x,loc=tt[i],scale=ttsig[i]*3)*ttsig[i]*3
+                    lnpri += np.log(prtt)
 
         return lnpri
     else:
@@ -773,13 +933,13 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig):
         return -np.inf
     
 
-def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, telvec,psig,porig):
-    lp = lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig)
+def lnprob(theta, jdb, rv, srv, fullpars, flt, pnames, plo, phi, norbit, npoly, telvec,psig,porig, tt, ttsig, ttfloat,circ):
+    lp = lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig, tt, ttsig, ttfloat,npoly,telvec)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec)
+    return lp + lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
 
-def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
+def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig, ttfloat,circ):
     
     newpars = np.copy(fullpars)
     
@@ -787,7 +947,8 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec):
     
     #jitter = newpars[-1]
 
-    model = rv_drive(newpars, jdb, norbit, npoly, telvec)
+    #model = rv_drive(newpars, jdb, norbit, npoly, telvec)
+    model = rv_drive_mc(newpars, jdb, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
 
     stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
 
@@ -806,7 +967,7 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec):
 
     return l0 + chisq 
 
-def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=200,telvec=-1,nsteps=1000,psig=-1,porig=-1): 
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,ttfloat='yes',ttsig=-1): 
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,0.5) #add placeholder for jitter
@@ -890,7 +1051,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         phi[5+i*6] = 1e8
 
 
-        #now consider known transits...
+        #now consider fixed transit effects
         if not tt[i] == 0:
             if circ[i] == 1:
                 flt[1+i*6] = 0
@@ -898,8 +1059,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
                 flt[3+i*6] = 0
                 bestpars[3+i*6] = 90.0
             #else:
-                #tie omega to ecc
-        
+                #tie omega to ecc inside rv_drive_mc
+                flt[3+i*6] = 0
 
     #limit polynomial terms
     for i in range(npoly):
@@ -908,16 +1069,41 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
     #need to limit offset terms if present!
     for i in range(ntel-1):
-        
         plo[i+norbits*6+npoly] = -1e6
         phi[i+norbits*6+npoly] = 1e6
+
+    #transit time must be either fixed or constrained with ttsig
+    #now deal with floating transit effects
+    if ttfloat == 'yes':
+        for i in range(norbits):
+            ind = i + norbits*6 + npoly + ntel-1
+            
+            if ttsig[i] > 0: #let float with limited range
+                plo[ind] = bestpars[ind] - 5*ttsig[i]
+                phi[ind] = bestpars[ind] + 5*ttsig[i]
+
+                #now tie other params...
+                if circ[i] == 1:
+                    #tie tp to tt inside rv_drive_mc - needs tt,ttsig,ttfloat
+                    bestpars[1+i*6] = tt[i]#this is not necessary?
+                    flt[1+i*6] = 0
+
+                    bestpars[3+i*6] = 90.0
+                    flt[3+i*6] = 0
+                else: #tie omega to tt & tp inside rv_drive
+                    flt[3+i*6] = 0
+                
+            else: #dummy variable, fix at original value
+                bestpars[ind] = tt[i]
+                flt[ind] = 0
+                plo[ind] = -1e8 #don't need this...
+                phi[ind] = 1e8
+    #else test that you have the right number of orbit params...
 
     #limit jitter
     plo[-1] = 0.001
     phi[-1] = 5.0
 
-
-   
        
     
     f = np.squeeze(flt.nonzero())
@@ -928,7 +1114,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     print 'MCMC params: ',pnames[f] 
     print 'guesses from LM: ',varpars
 
-    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,psig=psig,porig=porig)
+    chain = run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,psig=psig,porig=porig,tt=tt,ttsig=ttsig,ttfloat=ttfloat,circ=circ)
   
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -946,13 +1132,13 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     return mcbest, bestpars, pnames, flt, samples, mcpars, chain
 
 
-def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=-1,porig=-1):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=-1,porig=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no',circ=0):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-6*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,porig))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,porig, tt, ttsig, ttfloat,circ))
 
     #Run MCMC
     sampler.run_mcmc(pos, nsteps)
