@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no'):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.4569e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
 
 
     if npoly > 4:
@@ -166,9 +166,9 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         rple = 0.36
 
         #2 planets...       
-
-        #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
-        guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+        if norbits > 1:
+       # #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+            guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
 
 
     
@@ -187,13 +187,14 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
         guesspars = np.append(guesspars,offset)
 
     #append transit time if needed
-    for i in range(transit.size):  
+    if ttfloat == 'yes':
+        print 'Letting transit time/s float'
+    for i in range(norbits):  
         if not transit[i] == 0.0:
             transit[i] -= epoch 
 
         #add all by default, turn them off in LM fitter
         if ttfloat == 'yes':
-            print 'Letting transit time/s float'
             guesspars = np.append(guesspars,transit[i]) 
 
 
@@ -250,12 +251,12 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
             m.params[i+norbits*6+npoly] = 0
         
         #make plots & restore offset
-        plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec)
+        res0 = plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,keck=keck)
         m.params = par0
        
         #call MCMC    
         if nwalkers > 0:
-            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,ttfloat=ttfloat,ttsig=ttsig)
+            mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,ttfloat=ttfloat,ttsig=ttsig,fixjit=fixjit)
 
             #correct offset before plotting
             rvp = np.copy(rvnorm)
@@ -267,33 +268,39 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.455e6,circ=0,maxrv=1e6,minr
                 rvp[a] -= mcbest[i+norbits*6+npoly]
                 mcbest[i+norbits*6+npoly] = 0
             
-            plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1)
+            pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck)
+            #if storeflat == 'yes':
+                
             mcbest = par1
             
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
             #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
 
             #print output from mass_estimate for mc
-            print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly)
-            bic = calc_bic_mc(mcbest, flt, tnorm, rvnorm, nsrv, norbits, npoly, telvec)
+            print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly,telvec=telvec,ttfloat=ttfloat,ttsig=ttsig)
+            bic = calc_bic_mc(mcbest, flt, tnorm, rvnorm, nsrv, norbits, npoly, telvec, transit, ttsig, ttfloat,circ)
 
             print 'MC BIC:          ',str(bic)
             #make a nice triangle plot
-            print pnames
+            #print pnames
             f = np.squeeze(flt.nonzero())
             fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
             fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
             plt.close(fig)
+
+            #convergence testing...
+            psrf = gelman_rubin(chain)
+
         else:
             mcpars = -1
             mparr_mc = -1
             chain = -1
 
-
+            
         
-        write_full_soln(m, targname, mpsini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec)
+        write_full_soln(m, targname, mpsini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, ttfloat=ttfloat, ttsig=ttsig,mbic=bic)
 
-    return m,chain#, jdb0, rv0, srv0, fwhm, contrast, bis_span, rhk, sig_rhk, chain
+    return m,chain, mparr_mc
 
 def calc_bic_lm(m, flt, srv):
     
@@ -307,18 +314,18 @@ def calc_bic_lm(m, flt, srv):
 
     return bic
     
-def calc_bic_mc(mcbest,flt,jdb,rv,srv,norbit,npoly,telvec):
+def calc_bic_mc(mcbest,flt,jdb,rv,srv,norbit,npoly,telvec, tt, ttsig, ttfloat,circ):
   
     k = np.sum(flt)
     n = srv.size
   
-    lnl = lnlike_base(mcbest, jdb, rv, srv, norbit, npoly, telvec)
+    lnl = lnlike_base(mcbest, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
     bic = -2*lnl + k*np.log(n)
 
     return bic
      
 
-def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0):
+def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0,keck='no'):
 
     if mc > 0:
         usepars = np.copy(gpars) #this is mcbest...
@@ -335,9 +342,13 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
         parst[4] = 0.0
         poly = rv_drive(parst,tmod,norbits,npoly,telvec)
 
+    k = np.squeeze(np.where(telvec == 1))
+
     #unphased data
     plt.figure(1)
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(jdb[k],rv[k],yerr=srv[k],fmt='go') 
     plt.plot(tmod,model_final,'r-')
     if npoly > 0:
         plt.plot(tmod,poly,'g-')
@@ -358,11 +369,14 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     phase = (jdb - pars[1])/pars[0] % 1.0
 
     rvt = rv_drive(parst,jdb,norbits,npoly,telvec)   
+    pres = (rv-rvt) - pars[5] 
     telvec = np.zeros_like(tmod)
 
-    #Something wrong here for MC...
+    #Something wrong here for MC?
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(phase[k],rv[k]-rvt[k],yerr=srv[k],fmt='go') 
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
     #plt.plot((tmod - guess))
     if mc > 0:
@@ -370,11 +384,16 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     else:
         plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
     plt.close(2)
+    
+    return pres
 
-
-def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1):
+def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no',mbic=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
+
+    if len(np.array(telvec).shape) > 0:
+        tels = np.unique(telvec)
+        ntel = np.unique(telvec).size
     
     f = open('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_orbit.dat','w')
     for i in range(norbits):
@@ -387,59 +406,103 @@ def write_full_soln(m,targname,mpsini, bic, mparr_all=-1, mcpars=-1, mparr_mc=-1
         f.write('K1: '+str(m.params[4+i*6])+'\n')
         f.write('gamma: '+str(m.params[5+i*6])+'\n')        
     
+        if ttfloat == 'yes' and ttsig[i] > 0:
+             tind = i + norbits*6 + npoly + ntel-1
+             f.write('TT: '+str(m.params[tind])+'\n')
+             
+        f.write('mp*sin(i): '+str(mpsini[i])+'\n')
+
+
     for i in range(npoly):
         f.write(str(poly_names[i])+str(m.params[i+norbits*6]) +'\n')
     f.write('r chi sq: '+str(m.rchisq)+'\n')
     f.write('BIC: '+str(bic)+'\n')
     
-    for i in range(norbits):
-        f.write('mp*sin(i): '+str(mpsini[i])+'\n')
-    
-    if len(np.array(telvec).shape) > 0:
-        tels = np.unique(telvec)
-        ntel = np.unique(telvec).size
-        for i in range(ntel-1):
-            a = np.squeeze(np.where(telvec == tels[i+1]))
-            f.write('offset: '+str(m.params[i+norbits*6+npoly])+'\n')
+    for i in range(ntel-1):
+        a = np.squeeze(np.where(telvec == tels[i+1]))
+        f.write('offset: '+str(m.params[i+norbits*6+npoly])+'\n')
     
     if len(np.array(mcpars).shape) > 0: #print MCMC errs
+        mcbest = np.percentile(mcpars,50, axis=0)
+        mchi = np.percentile(mcpars,84, axis=0)
+        mclo = np.percentile(mcpars,16, axis=0)
+
         for i in range(norbits):
             f.write('                                               \n')
             f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
-            f.write('Per: '+ str(np.mean(mcpars[:,0+i*6]))+'+/-'+str(np.std(mcpars[:,0+i*6]))+'\n')
-            f.write('Tp: '+ str(np.mean(mcpars[:,1+i*6]))+'+/-'+str(np.std(mcpars[:,1+i*6]))+'\n')
-            f.write('ecc: '+ str(np.mean(mcpars[:,2+i*6]))+'+/-'+str(np.std(mcpars[:,2+i*6]))+'\n')
-            f.write('om: '+ str(np.mean(mcpars[:,3+i*6]))+'+/-'+str(np.std(mcpars[:,3+i*6]))+'\n')
-            f.write('K1: '+ str(np.mean(mcpars[:,4+i*6]))+'+/-'+str(np.std(mcpars[:,4+i*6]))+'\n')
-            f.write('gamma: '+ str(np.mean(mcpars[:,5+i*6]))+'+/-'+str(np.std(mcpars[:,5+i*6]))+'\n')
+            f.write('Per: '+str(mcbest[0+i*6])+' +'+str(mchi[0+i*6] - mcbest[0+i*6])+' -'+str(mcbest[0+i*6] - mclo[0+i*6])+'\n')
+            f.write('Tp: '+ str(mcbest[1+i*6])+' +'+str(mchi[1+i*6] - mcbest[1+i*6])+' -'+str(mcbest[1+i*6] - mclo[1+i*6])+'\n')
+            f.write('ecc: '+ str(mcbest[2+i*6])+' +'+str(mchi[2+i*6] - mcbest[2+i*6])+' -'+str(mcbest[2+i*6] - mclo[2+i*6])+'\n')
+            f.write('om: '+str(mcbest[3+i*6])+' +'+str(mchi[3+i*6] - mcbest[3+i*6])+' -'+str(mcbest[3+i*6] - mclo[3+i*6]) +'\n')
+            f.write('K1: '+str(mcbest[4+i*6])+' +'+str(mchi[4+i*6] - mcbest[4+i*6])+' -'+str(mcbest[4+i*6] - mclo[4+i*6]) +'\n')
+            f.write('gamma: '+ str(mcbest[5+i*6])+' +'+str(mchi[5+i*6] - mcbest[5+i*6])+' -'+str(mcbest[5+i*6] - mclo[5+i*6])+'\n')
             
+            if ttfloat == 'yes' and ttsig[i] > 0:
+                tind = i + norbits*6 + npoly + ntel-1
+                f.write('TT: '+ str(mcbest[tind])+' +'+str(mchi[tind] - mcbest[tind])+' -'+str(mcbest[tind] - mclo[tind])+'\n')
+
+            mpbest = np.percentile(mparr_mc[i,:], 50)
+            mphi = np.percentile(mparr_mc[i,:], 84)
+            mplo = np.percentile(mparr_mc[i,:], 16)
             
+            f.write('mp*sin(i): '+str(mpbest)+' +'+str(mphi-mpbest)+' -'+str(mpbest-mplo)+'\n')
+            f.write('mass error:'+ str((mphi-mpbest)/mpbest*100)+','+str((mpbest-mplo)/mpbest*100)+ '%'+'\n') 
+
 
         for i in range(npoly):
-            f.write(str(poly_names[i])+str(np.mean(mcpars[:,i+norbits*6]))+'+/-'+str(np.std(mcpars[:,i+norbits*6])) +'\n')
-    
-        for i in range(norbits):
-            f.write('mp*sin(i): '+str(np.mean(mparr_mc[i,:]))+'+/-'+str(np.std(mparr_mc[i,:]))+'\n')
-            f.write('mass error:'+ str(np.std(mparr_mc[i,:])/mpsini[i]*100)+'%'+'\n') 
+            f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
+        for i in range(ntel-1):
+            a = np.squeeze(np.where(telvec == tels[i+1]))
+            f.write('offset: '+str(mcbest[i+norbits*6+npoly])+' +'+str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly])+' -'+str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])+'\n')
+            
+        f.write('jitter: '+ str(mcbest[-1])+' +'+str(mchi[-1]-mcbest[-1])+' -'+str(mcbest[-1]-mclo[-1])+'\n')
+
+        f.write('MC BIC: '+str(mbic)+'\n')
     f.close() 
-def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0):
+
+def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no'):
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
+
+    if len(np.array(telvec).shape) > 0:
+        tels = np.unique(telvec)
+        ntel = np.unique(telvec).size
+
+    mcbest = np.percentile(mcpars,50, axis=0)
+    mchi = np.percentile(mcpars,84, axis=0)
+    mclo = np.percentile(mcpars,16, axis=0)
+
+    
+
     for i in range(norbits):
         print '                                               '
         print '*****Planet ',str(i+1),' MCMC Errors:*****'  
-        print 'Per: ', str(np.mean(mcpars[:,0+i*6])),'+/-',str(np.std(mcpars[:,0+i*6]))
-        print 'Tp: ', str(np.mean(mcpars[:,1+i*6])),'+/-',str(np.std(mcpars[:,1+i*6]))
-        print 'Ecc: ', str(np.mean(mcpars[:,2+i*6])),'+/-',str(np.std(mcpars[:,2+i*6]))
-        print 'Om: ', str(np.mean(mcpars[:,3+i*6])),'+/-',str(np.std(mcpars[:,3+i*6]))
-        print 'K: ', str(np.mean(mcpars[:,4+i*6])),'+/-',str(np.std(mcpars[:,4+i*6]))
-        print 'gamma: ', str(np.mean(mcpars[:,5+i*6])),'+/-',str(np.std(mcpars[:,5+i*6]))
+        print 'Per: ', str(mcbest[0+i*6]),' +',str(mchi[0+i*6] - mcbest[0+i*6]),' -',str(mcbest[0+i*6] - mclo[0+i*6])
+        print 'Tp: ', str(mcbest[1+i*6]),' +',str(mchi[1+i*6] - mcbest[1+i*6]),' -',str(mcbest[1+i*6] - mclo[1+i*6])
+        print 'Ecc: ', str(mcbest[2+i*6]),' +',str(mchi[2+i*6] - mcbest[2+i*6]),' -',str(mcbest[2+i*6] - mclo[2+i*6])
+        print 'Om: ', str(mcbest[3+i*6]),' +',str(mchi[3+i*6] - mcbest[3+i*6]),' -',str(mcbest[3+i*6] - mclo[3+i*6])
+        print 'K: ', str(mcbest[4+i*6]),' +',str(mchi[4+i*6] - mcbest[4+i*6]),' -',str(mcbest[4+i*6] - mclo[4+i*6])
+        print 'gamma: ', str(mcbest[5+i*6]),' +',str(mchi[5+i*6] - mcbest[5+i*6]),' -',str(mcbest[5+i*6] - mclo[5+i*6])
 
-        print 'mp*sin(i): ',str(np.mean(mparr_all[i,:])),'+/-',str(np.std(mparr_all[i,:]))
-        print 'mass error:', str(np.std(mparr_all[i,:])/mpsini[i]*100),'%'
+        if ttfloat == 'yes' and ttsig[i] > 0:
+            tind = i + norbits*6 + npoly + ntel-1
+            print 'TT: ',str(mcbest[tind]),' +',str(mchi[tind] - mcbest[tind]),' -',str(mcbest[tind] - mclo[tind])
+
+        mpbest = np.percentile(mparr_all[i,:], 50)
+        mphi = np.percentile(mparr_all[i,:], 84)
+        mplo = np.percentile(mparr_all[i,:], 16)
+
+        print 'mp*sin(i): ',str(mpbest),' +',str(mphi-mpbest),' -',str(mpbest-mplo)
+        print 'mass error:', str((mphi-mpbest)/mpbest*100),',',str((mpbest-mplo)/mpbest*100), '%'
     
     for i in range(npoly):
-        print str(poly_names[i]), str(np.mean(mcpars[:,i+norbits*6])),'+/-',str(np.std(mcpars[:,i+norbits*6]))
-    print 'jitter: ', str(np.mean(mcpars[:,-1])),'+/-',str(np.std(mcpars[:,-1]))
+        print str(poly_names[i]), str(mcbest[i+norbits*6]),' +',str(mchi[i+norbits*6]-mcbest[i+norbits*6]),' -',str(mcbest[i+norbits*6]-mclo[i+norbits*6])
+
+    
+    for i in range(ntel-1):
+        a = np.squeeze(np.where(telvec == tels[i+1]))
+        print 'offset: ',str(mcbest[i+norbits*6+npoly]),' +',str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly]),' -',str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])
+
+    print 'jitter: ', str(mcbest[-1]),' +',str(mchi[-1]-mcbest[-1]),' -',str(mcbest[-1]-mclo[-1])
     return
 
 def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
@@ -516,8 +579,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, tt=np.
         
     #ttfloat = orbel[norbits*6 + npoly + ntel-1 + 0-norbits] norbits terms
 
-    print orbel
-
+   
     ip = np.arange(norbits)
 
     if len(np.array(telvec).shape) > 0:
@@ -957,9 +1019,10 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig,
 
     return l0 + chisq 
 
-def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec):
+def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloat,circ):
     
-    model = rv_drive(bestpars, jdb, norbit, npoly, telvec)
+    #model = rv_drive(bestpars, jdb, norbit, npoly, telvec)
+    model = rv_drive_mc(bestpars, jdb, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
     stot = np.sqrt(srv**2 + bestpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
@@ -967,7 +1030,7 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec):
 
     return l0 + chisq 
 
-def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,ttfloat='yes',ttsig=-1): 
+def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,ttfloat='yes',ttsig=-1,fixjit='no'): 
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,0.5) #add placeholder for jitter
@@ -1024,9 +1087,9 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
             flt[0+i*6] = 0
         
 
-        #limit Tp
-        plo[1+i*6] = -3e6
-        phi[1+i*6] = 3e6
+        #limit Tp - within 1 orbit
+        plo[1+i*6] = bestpars[1+i*6]-bestpars[0+i*6]
+        phi[1+i*6] = bestpars[1+i*6]+bestpars[0+i*6]
 
         #fix/limit ecc
         if circ[i] == 1:
@@ -1079,8 +1142,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
             ind = i + norbits*6 + npoly + ntel-1
             
             if ttsig[i] > 0: #let float with limited range
-                plo[ind] = bestpars[ind] - 5*ttsig[i]
-                phi[ind] = bestpars[ind] + 5*ttsig[i]
+                plo[ind] = bestpars[ind] - 10*ttsig[i]
+                phi[ind] = bestpars[ind] + 10*ttsig[i]
 
                 #now tie other params...
                 if circ[i] == 1:
@@ -1101,6 +1164,10 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     #else test that you have the right number of orbit params...
 
     #limit jitter
+    if fixjit == 'yes':
+        print 'adding ',str(jitter),'m/s fixed jitter '
+        bestpars[-1] = jitter
+        flt[-1] = 0
     plo[-1] = 0.001
     phi[-1] = 5.0
 
@@ -1148,3 +1215,34 @@ def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, 
     return sampler.chain
 
 
+def gelman_rubin(chain):
+
+    #(nchains, nsteps, npars)
+
+    #discard first half of chain
+    nchain = chain.shape[0] #m
+    nsteps = chain.shape[1] #n
+    npars = chain.shape[2]
+    nkeep = nsteps/2
+
+    last = chain[:,nkeep:,:]
+ 
+    #calculate within-chain variance - this is an underestimate
+    
+    chvar = np.var(last,axis=1) #variance of each chain, shape(nchain,npars)
+    W = 1.0/nchain*np.sum(chvar,axis=0) #shape(npars)
+    print chvar.shape, W.shape
+
+    #calculate between-chain variance
+    chmean = np.mean(last,axis=1) #mean of each chain, shape(nchain,npars)
+    meanmean = np.mean(chmean,axis=0) #shape(npars)
+
+    B = np.zeros(npars)
+    for i in range(npars):
+        B[i] = np.float(nsteps)/(nchain-1)*np.sum((chmean[:,i] - meanmean[i])**2)
+
+    #estimate variance of stationary dist
+    esvar = (1 - 1.0/nsteps)*W + 1.0/nsteps*B
+
+    R = np.sqrt(esvar/W)
+    print 'Reduction factor: ', R
