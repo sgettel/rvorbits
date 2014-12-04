@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.4569e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
+def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
 
 
     if npoly > 4:
@@ -156,14 +156,16 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4569e6,circ=0,maxrv=1e6,min
         guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0])
         #transit = np.array([2455008.06601,0.0])
         transit = np.array([2455008.06787,0.0]) 
-        psig = np.array([2.6e-5,0.0])
-        ttsig = np.array([0.00085,0.0])
+        psig = np.array([6.1e-6,0.0])
+        ttsig = np.array([0.00061,0.0])
         porig = guesspars[0+ip*6] 
         ttorig = np.copy(transit)
 
-        mstar = 1.07
-        rpl = 1.82 #Me
-        rple = 0.36
+        mstar = 1.069
+        rpl = 1.854 #Me
+        rple = 0.041
+        inc = 89.9771
+        ince = 0.30
 
         #2 planets...       
         if norbits > 1:
@@ -285,7 +287,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4569e6,circ=0,maxrv=1e6,min
             #print pnames
             f = np.squeeze(flt.nonzero())
             fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
-            fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.png')
+            fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.pdf')
             plt.close(fig)
 
             #convergence testing...
@@ -298,7 +300,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4569e6,circ=0,maxrv=1e6,min
 
             
         
-        write_full_soln(m, targname, mpsini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, ttfloat=ttfloat, ttsig=ttsig,mbic=bic)
+        write_full_soln(m, targname, mpsini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, ttfloat=ttfloat, ttsig=ttsig,mbic=bic,psrf=psrf)
 
     return m,chain, mparr_mc
 
@@ -350,13 +352,15 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     if keck == 'yes':
         plt.errorbar(jdb[k],rv[k],yerr=srv[k],fmt='go') 
     plt.plot(tmod,model_final,'r-')
+    plt.xlabel('Adjusted BJD')
+    plt.ylabel('Normalized RV (m/s)')
     if npoly > 0:
         plt.plot(tmod,poly,'g-')
     
     if mc > 0:
-       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot_mc.png') 
+       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot_mc.pdf') 
     else:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.png')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.pdf')
     plt.close(1)
 
     #phase at 1st period
@@ -378,16 +382,18 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     if keck == 'yes':
         plt.errorbar(phase[k],rv[k]-rvt[k],yerr=srv[k],fmt='go') 
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive(pars, tmod,1,0,telvec),'r.')
+    plt.xlabel('Orbital Phase')
+    plt.ylabel('Normalized RV (m/s)')
     #plt.plot((tmod - guess))
     if mc > 0:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot_mc.png')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot_mc.pdf')
     else:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.png')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.pdf') 
     plt.close(2)
     
     return pres
 
-def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no',mbic=-1):
+def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no',mbic=-1,psrf=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
 
@@ -444,7 +450,9 @@ def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npo
             mpbest = np.percentile(mparr_mc[i,:], 50)
             mphi = np.percentile(mparr_mc[i,:], 84)
             mplo = np.percentile(mparr_mc[i,:], 16)
-            
+            f.write('nsamples: '+str(mparr_mc.shape[1])+'\n')
+            f.write('convergence: '+str(psrf)+'\n')
+
             f.write('mp*sin(i): '+str(mpbest)+' +'+str(mphi-mpbest)+' -'+str(mpbest-mplo)+'\n')
             f.write('mass error:'+ str((mphi-mpbest)/mpbest*100)+','+str((mpbest-mplo)/mpbest*100)+ '%'+'\n') 
 
@@ -979,14 +987,14 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig, tt, tts
         for i in range(norbit):
             if psig[i] > 0:
                 x = fullpars[0+i*6]
-                prper = norm.pdf(x,loc=porig[i],scale=psig[i]*3)*psig[i]*3
+                prper = norm.pdf(x,loc=porig[i],scale=psig[i])*psig[i]
                 lnpri += np.log(prper)
 
             if ttfloat == 'yes':
                 if ttsig[i] > 0:
                     tind = i + norbit*6 + npoly + ntel-1
                     x = fullpars[tind]
-                    prtt = norm.pdf(x,loc=tt[i],scale=ttsig[i]*3)*ttsig[i]*3
+                    prtt = norm.pdf(x,loc=tt[i],scale=ttsig[i])*ttsig[i]
                     lnpri += np.log(prtt)
 
         return lnpri
@@ -1078,8 +1086,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         
         #fix/limit period:
         if psig[i]> 0:
-            plo[0+i*6] = porig[i] - 5*psig[i]
-            phi[0+i*6] = porig[i] + 5*psig[i]  
+            plo[0+i*6] = porig[i] - 10*psig[i]
+            phi[0+i*6] = porig[i] + 10*psig[i]  
         else:
             plo[0+i*6] = 0.1
             phi[0+i*6] = (np.max(jdb)-np.min(jdb))*20 
@@ -1246,3 +1254,4 @@ def gelman_rubin(chain):
 
     R = np.sqrt(esvar/W)
     print 'Reduction factor: ', R
+    return R
