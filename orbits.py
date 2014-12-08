@@ -88,9 +88,15 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
             
             
 
-            sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'.dat')
+#            sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'.dat')
+#            kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(2,3,4))
+#            kjdb = kjdb + 2.45e6 
+
+            sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'_full.dat')
             kjdb, krv, ksrv = np.loadtxt(sfile,unpack=True,usecols=(2,3,4))
-            kjdb = kjdb + 2.45e6 
+            kjdb = kjdb + 2.44e6
+
+
             krvnorm = krv - np.median(krv)
             ktel = np.ones_like(kjdb)
                 
@@ -99,7 +105,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
             rvnorm = np.append(rvnorm,krvnorm)
             srv = np.append(srv,ksrv)
             telvec = np.append(telvec,ktel)
-            #print kjdb
+            print kjdb.size,' Keck obs'
         else:
             rvnorm = rv - np.median(rv)
 
@@ -170,7 +176,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
         #2 planets...       
         if norbits > 1:
        # #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
-            guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 40.0, 137.0,0.0])
+            guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0])
 
 
     
@@ -276,22 +282,24 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
             mcbest = par1
             
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
-            #dpl = density_estimate(mpsini,rpl, mcpar=mcpars, rple=rple)
+            dpl = density_estimate(mpsini,rpl, mcmass=mparr_mc, rple=rple)
 
             #print output from mass_estimate for mc
-            print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly,telvec=telvec,ttfloat=ttfloat,ttsig=ttsig)
+            print_mc_errs(mcpars, mpsini, mparr_mc,norbits=norbits,npoly=npoly,telvec=telvec,ttfloat=ttfloat,ttsig=ttsig,mcdpl=dpl)
             bic = calc_bic_mc(mcbest, flt, tnorm, rvnorm, nsrv, norbits, npoly, telvec, transit, ttsig, ttfloat,circ)
 
             print 'MC BIC:          ',str(bic)
+
+            #convergence testing...
+            psrf = gelman_rubin(chain)
+
             #make a nice triangle plot
-            #print pnames
             f = np.squeeze(flt.nonzero())
             fig = triangle.corner(samples, labels=pnames[f], truths=bestpars[f]) 
             fig.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.pdf')
             plt.close(fig)
 
-            #convergence testing...
-            psrf = gelman_rubin(chain)
+            
 
         else:
             mcpars = -1
@@ -468,7 +476,7 @@ def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npo
         f.write('MC BIC: '+str(mbic)+'\n')
     f.close() 
 
-def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no'):
+def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),ttsig=-1,ttfloat='no',mcdpl=-1):
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
 
     if len(np.array(telvec).shape) > 0:
@@ -477,9 +485,7 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.ze
 
     mcbest = np.percentile(mcpars,50, axis=0)
     mchi = np.percentile(mcpars,84, axis=0)
-    mclo = np.percentile(mcpars,16, axis=0)
-
-    
+    mclo = np.percentile(mcpars,16, axis=0) 
 
     for i in range(norbits):
         print '                                               '
@@ -501,6 +507,11 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.ze
 
         print 'mp*sin(i): ',str(mpbest),' +',str(mphi-mpbest),' -',str(mpbest-mplo)
         print 'mass error:', str((mphi-mpbest)/mpbest*100),',',str((mpbest-mplo)/mpbest*100), '%'
+        if i == 0:
+            dpbest = np.percentile(mcdpl[i,:], 50)
+            dphi = np.percentile(mcdpl[i,:], 84)
+            dplo = np.percentile(mcdpl[i,:], 16)
+            print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
     
     for i in range(npoly):
         print str(poly_names[i]), str(mcbest[i+norbits*6]),' +',str(mchi[i+norbits*6]-mcbest[i+norbits*6]),' -',str(mcbest[i+norbits*6]-mclo[i+norbits*6])
@@ -556,16 +567,21 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     else:
         return mpsini
 
-def density_estimate(mpsini,rpl,mcpar=-1,rple=-1):
+def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     
     rpl = ut.arrayify(rpl)
     nplanets = rpl.size
 
     re2cm = 1./6.378e8
     vol = 4./3.*np.pi*(rpl/re2cm)**3 #cm**3
-    dpl = mpsini[0:nplanets]*5.973e27/vol
+    #dpl = mpsini[0:nplanets]*5.973e27/vol
+    dpl = mpsini[0]*5.973e27/vol
 
-    return dpl
+    if len(np.array(mcmass).shape) > 0:
+        mcdpl = mcmass[0,:]*5.973e27/vol
+        return mcdpl
+    else:
+        return dpl
 
 
    
@@ -1044,6 +1060,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     bestpars = np.append(bestpars,0.5) #add placeholder for jitter
     pnames = np.copy(m.pnames)
     pnames = np.append(pnames,'jitter')
+    print 'smaller gaussian prior'
 
     #p = orbel[0+i*6]
     #tp = orbel[1+i*6]
