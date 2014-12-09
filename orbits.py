@@ -508,9 +508,9 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.ze
         print 'mp*sin(i): ',str(mpbest),' +',str(mphi-mpbest),' -',str(mpbest-mplo)
         print 'mass error:', str((mphi-mpbest)/mpbest*100),',',str((mpbest-mplo)/mpbest*100), '%'
         if i == 0:
-            dpbest = np.percentile(mcdpl[i,:], 50)
-            dphi = np.percentile(mcdpl[i,:], 84)
-            dplo = np.percentile(mcdpl[i,:], 16)
+            dpbest = np.percentile(mcdpl[:], 50)
+            dphi = np.percentile(mcdpl[:], 84)
+            dplo = np.percentile(mcdpl[:], 16)
             print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
     
     for i in range(npoly):
@@ -1125,6 +1125,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         #limit omega
         if circ[i] == 1:
             flt[3+i*6] = 0
+        else:
+           bestpars[3+i*6] += 0.05 #poke it b/c it sticks at zero?
         plo[3+i*6] = 0.0
         phi[3+i*6] = 360.0
 
