@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch pvar
+# Branch jit2
 #
 
 
@@ -15,7 +15,7 @@ import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
 
 
     if npoly > 4:
@@ -26,6 +26,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
     telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
+    #jitter = ut.arrayify(jitter)
     
 
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
@@ -114,11 +115,11 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
     #    print 'truncating dates'
     tnorm = jdb - epoch #truncate
   
-    if jitter > 0.0: 
-        nsrv = np.sqrt(srv**2 + jitter**2)
-        print 'Adding ',str(jitter),' m/s fixed jitter'
-    else:
-        nsrv = srv
+#    if jitter > 0.0: 
+#        nsrv = np.sqrt(srv**2 + jitter**2)
+#        print 'Adding ',str(jitter),' m/s fixed jitter'
+#    else:
+    nsrv = srv
 
 
 
@@ -148,7 +149,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
         
     #ttfloat = orbel[norbits*6 + npoly + ntel-1] #up to norbits terms
 
-    #jitter - final term, MCMC only
+    #jitter - final term/s, MCMC only
     rpl = 0.0
 
     if targname == 'HD209458':
@@ -268,7 +269,7 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
 
             #correct offset before plotting
             rvp = np.copy(rvnorm)
-            #print 'mcbest:', mcbest
+            print 'mcbest:', mcbest
             par1 = np.copy(mcbest)
             for i in range(ntel-1):
                 a = np.squeeze(np.where(telvec == tels[i+1]))
@@ -277,8 +278,13 @@ def orbits_test(targname='K00273',jitter=0.0,epoch=2.4568e6,circ=0,maxrv=1e6,min
                 mcbest[i+norbits*6+npoly] = 0
             
             pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck)
-            #if storeflat == 'yes':
-                
+            if storeflat == 'yes':
+                f = open('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_rvflat.dat','w')
+                for i in range(tnorm.size):
+                    f.write('#tnorm    res    srv    tel            \n') 
+
+                    f.write(str(tnorm[i])+' '+str(pres[i])+' '+str(nsrv[i])+' '+str(telvec[i])+'\n')
+                f.close()
             mcbest = par1
             
             mpsini, mparr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
@@ -384,7 +390,6 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     pres = (rv-rvt) - pars[5] 
     telvec = np.zeros_like(tmod)
 
-    #Something wrong here for MC?
     plt.figure(2)
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     if keck == 'yes':
@@ -1036,6 +1041,14 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig,
     #model = rv_drive(newpars, jdb, norbit, npoly, telvec)
     model = rv_drive_mc(newpars, jdb, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
 
+    #now add jitter
+    tels = np.unique(telvec)
+    ntel = tels.size
+    stot = np.zeros(telvec.size)
+#    for i in range(ntel):
+#        a = np.squeeze(np.where(telvec == tels[i]))         
+#        stot[a] = np.sqrt(srv[a]**2 + newpars[-ntel+i]**2)
+
     stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
@@ -1047,6 +1060,12 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloa
     
     #model = rv_drive(bestpars, jdb, norbit, npoly, telvec)
     model = rv_drive_mc(bestpars, jdb, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
+    tels = np.unique(telvec)
+    ntel = tels.size
+    stot = np.zeros(telvec.size)
+#    for i in range(ntel):
+#        a = np.squeeze(np.where(telvec == tels[i]))         
+#        stot[a] = np.sqrt(srv[a]**2 + newpars[-ntel+i]**2)
     stot = np.sqrt(srv**2 + bestpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
@@ -1056,9 +1075,20 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloa
 
 def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,ttfloat='yes',ttsig=-1,fixjit='no'): 
 
+    if len(np.array(telvec).shape) > 0:
+        ntel = np.unique(telvec).size
+        tels = np.unique(telvec)
+    else:
+        ntel = 1
+
+#    if jitter.size < ntel:
+#        jitter = np.ones(ntel)*jitter
+
     bestpars = np.copy(m.params)
-    bestpars = np.append(bestpars,0.5) #add placeholder for jitter
+    bestpars = np.append(bestpars,jitter) #add placeholder for jitter
     pnames = np.copy(m.pnames)
+#    jnames = ['jitter']*ntel
+#    pnames = np.append(pnames,jnames)
     pnames = np.append(pnames,'jitter')
     print 'smaller gaussian prior'
 
@@ -1076,18 +1106,12 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
 
     npars = bestpars.size
 
-    if jitter > 0:
-        print 'removing ',str(jitter),' m/s fixed jitter'
-        srv = np.sqrt(srv_in**2 - jitter**2)
-    else:
-        srv = srv_in
+#    if jitter > 0:
+#        print 'removing ',str(jitter),' m/s fixed jitter'
+#        srv = np.sqrt(srv_in**2 - jitter**2)
+#    else:
+    srv = srv_in
 
-    if len(np.array(telvec).shape) > 0:
-        ntel = np.unique(telvec).size
-        tels = np.unique(telvec)
-    else:
-        ntel = 1
-        
 
     #these will hold reasonable limits on priors
     plo = np.zeros(npars)
@@ -1112,9 +1136,9 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
             flt[0+i*6] = 0
         
 
-        #limit Tp - within 1 orbit
-        plo[1+i*6] = bestpars[1+i*6]-bestpars[0+i*6]
-        phi[1+i*6] = bestpars[1+i*6]+bestpars[0+i*6]
+        #limit Tp - within just over a full orbit
+        plo[1+i*6] = bestpars[1+i*6]-bestpars[0+i*6]*0.8
+        phi[1+i*6] = bestpars[1+i*6]+bestpars[0+i*6]*0.8
 
         #fix/limit ecc
         if circ[i] == 1:
@@ -1193,11 +1217,18 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     #limit jitter
     if fixjit == 'yes':
         print 'adding ',str(jitter),'m/s fixed jitter '
-        bestpars[-1] = jitter
-        flt[-1] = 0
+        bestpars[-ntel:] = jitter
+        flt[-ntel:] = 0
     plo[-1] = 0.001
     phi[-1] = 5.0
+#    plo[-ntel:] = 0.000
+#    phi[-ntel:] = 5.0
 
+#    print pnames
+#    print flt
+#    print bestpars
+#    print plo
+#    print phi
        
     
     f = np.squeeze(flt.nonzero())
