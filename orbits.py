@@ -2,6 +2,7 @@
 
 #
 # Branch jit2
+# PUT ALL TRANSITING PLANETS FIRST!
 #
 
 
@@ -17,7 +18,7 @@ from scipy.stats import norm
 
 def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,ttfloat='no',fixjit='no',storeflat='no'):
 
-
+    tag = ''
     if npoly > 4:
         print 'Must have <= 4th order polynomial'
 
@@ -26,8 +27,13 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
     telvec = np.zeros(1)
     circ = ut.arrayify(circ)
     pfix = ut.arrayify(pfix)
-    #jitter = ut.arrayify(jitter)
-    
+    jitter = ut.arrayify(jitter)
+
+    for i in circ:
+        if i == 1:
+            tag += '_circ'
+        else:
+            tag += '_ecc'
 
     if socket.gethostname() == 'sara-gettels-macbook-2.local':
     	home = '/Users/Sara/'
@@ -158,6 +164,10 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
         mstar = 1.0
     
     if targname == 'K00273':
+
+##################### UPDATE
+
+
 
         #guesspars = np.array([10.573769, 2455008.06601, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0]) #K00273
         guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 1.7358979, -3398.0498, 1.1889011, 0.010, 0.0])#, 0.0])
@@ -452,6 +462,7 @@ def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npo
             f.write('Per: '+str(mcbest[0+i*6])+' +'+str(mchi[0+i*6] - mcbest[0+i*6])+' -'+str(mcbest[0+i*6] - mclo[0+i*6])+'\n')
             f.write('Tp: '+ str(mcbest[1+i*6])+' +'+str(mchi[1+i*6] - mcbest[1+i*6])+' -'+str(mcbest[1+i*6] - mclo[1+i*6])+'\n')
             f.write('ecc: '+ str(mcbest[2+i*6])+' +'+str(mchi[2+i*6] - mcbest[2+i*6])+' -'+str(mcbest[2+i*6] - mclo[2+i*6])+'\n')
+            f.write('ecc1: '+ str(np.percentile(mcpars,0,axis=0)[2+i*6])+'-'+str(np.percentile(mcpars,68,axis=0)[2+i*6])+'\n')
             f.write('om: '+str(mcbest[3+i*6])+' +'+str(mchi[3+i*6] - mcbest[3+i*6])+' -'+str(mcbest[3+i*6] - mclo[3+i*6]) +'\n')
             f.write('K1: '+str(mcbest[4+i*6])+' +'+str(mchi[4+i*6] - mcbest[4+i*6])+' -'+str(mcbest[4+i*6] - mclo[4+i*6]) +'\n')
             f.write('gamma: '+ str(mcbest[5+i*6])+' +'+str(mchi[5+i*6] - mcbest[5+i*6])+' -'+str(mcbest[5+i*6] - mclo[5+i*6])+'\n')
@@ -475,8 +486,9 @@ def write_full_soln(m,targname,mpsini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npo
         for i in range(ntel-1):
             a = np.squeeze(np.where(telvec == tels[i+1]))
             f.write('offset: '+str(mcbest[i+norbits*6+npoly])+' +'+str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly])+' -'+str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])+'\n')
-            
-        f.write('jitter: '+ str(mcbest[-1])+' +'+str(mchi[-1]-mcbest[-1])+' -'+str(mcbest[-1]-mclo[-1])+'\n')
+
+        for i in range(ntel):
+            f.write('jitter: '+ str(mcbest[-ntel+i])+' +'+str(mchi[-ntel+i]-mcbest[-ntel+i])+' -'+str(mcbest[-ntel+i]-mclo[-ntel+i])+'\n')
 
         f.write('MC BIC: '+str(mbic)+'\n')
     f.close() 
@@ -498,6 +510,7 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.ze
         print 'Per: ', str(mcbest[0+i*6]),' +',str(mchi[0+i*6] - mcbest[0+i*6]),' -',str(mcbest[0+i*6] - mclo[0+i*6])
         print 'Tp: ', str(mcbest[1+i*6]),' +',str(mchi[1+i*6] - mcbest[1+i*6]),' -',str(mcbest[1+i*6] - mclo[1+i*6])
         print 'Ecc: ', str(mcbest[2+i*6]),' +',str(mchi[2+i*6] - mcbest[2+i*6]),' -',str(mcbest[2+i*6] - mclo[2+i*6])
+        #f.write('ecc1: '+ str(np.percentile(mcpars,0,axis=0)[2+i*6])+'-'+str(np.percentile(mcpars,68,axis=0)[2+i*6])+'\n')
         print 'Om: ', str(mcbest[3+i*6]),' +',str(mchi[3+i*6] - mcbest[3+i*6]),' -',str(mcbest[3+i*6] - mclo[3+i*6])
         print 'K: ', str(mcbest[4+i*6]),' +',str(mchi[4+i*6] - mcbest[4+i*6]),' -',str(mcbest[4+i*6] - mclo[4+i*6])
         print 'gamma: ', str(mcbest[5+i*6]),' +',str(mchi[5+i*6] - mcbest[5+i*6]),' -',str(mcbest[5+i*6] - mclo[5+i*6])
@@ -523,10 +536,11 @@ def print_mc_errs(mcpars, mpsini, mparr_all,norbits=1,npoly=0,telvec=-1,tt=np.ze
 
     
     for i in range(ntel-1):
-        a = np.squeeze(np.where(telvec == tels[i+1]))
+        #a = np.squeeze(np.where(telvec == tels[i+1]))
         print 'offset: ',str(mcbest[i+norbits*6+npoly]),' +',str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly]),' -',str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])
-
-    print 'jitter: ', str(mcbest[-1]),' +',str(mchi[-1]-mcbest[-1]),' -',str(mcbest[-1]-mclo[-1])
+    
+    for i in range(ntel):
+        print 'jitter: ', str(mcbest[-ntel+i]),' +',str(mchi[-ntel+i]-mcbest[-ntel+i]),' -',str(mcbest[-ntel+i]-mclo[-ntel+i])
     return
 
 def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
@@ -997,9 +1011,16 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig, tt, tts
         ntel = np.unique(telvec).size
 
     #figure out which params are varied and the associated limits
-    pfloat = pnames[flt.nonzero()]
-    lfloat = plo[flt.nonzero()]
-    hfloat = phi[flt.nonzero()]
+    f = np.squeeze(flt.nonzero())
+    
+    pfloat = pnames[f]
+    lfloat = plo[f]
+    hfloat = phi[f]
+
+    
+    pind = ut.arrayify(np.squeeze(np.where(pfloat == 'Per')))
+    ttind = ut.arrayify(np.squeeze(np.where(pfloat == 'transit')))
+ 
 
     #flat priors for all
     if (theta >= lfloat).all() and (theta < hfloat).all():
@@ -1007,17 +1028,19 @@ def lnprior(theta, fullpars, flt, pnames, plo, phi, norbit, psig, porig, tt, tts
         
         for i in range(norbit):
             if psig[i] > 0:
-                x = fullpars[0+i*6]
+                x = theta[pind[i]] #FIX THIS
+                
                 prper = norm.pdf(x,loc=porig[i],scale=psig[i])*psig[i]
                 lnpri += np.log(prper)
-
+                
             if ttfloat == 'yes':
                 if ttsig[i] > 0:
-                    tind = i + norbit*6 + npoly + ntel-1
-                    x = fullpars[tind]
+                    x = theta[ttind[i]] #FIX THIS
+                    
                     prtt = norm.pdf(x,loc=tt[i],scale=ttsig[i])*ttsig[i]
                     lnpri += np.log(prtt)
-
+                    
+        
         return lnpri
     else:
         
@@ -1036,7 +1059,7 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig,
     
     newpars[flt.nonzero()] = theta
     
-    #jitter = newpars[-1]
+    #jitter = newpars[-ntel:]
 
     #model = rv_drive(newpars, jdb, norbit, npoly, telvec)
     model = rv_drive_mc(newpars, jdb, norbit, npoly, telvec, tt, ttsig, ttfloat,circ)
@@ -1045,11 +1068,11 @@ def lnlike(theta, jdb, rv, srv, fullpars, flt, norbit, npoly, telvec, tt, ttsig,
     tels = np.unique(telvec)
     ntel = tels.size
     stot = np.zeros(telvec.size)
-#    for i in range(ntel):
-#        a = np.squeeze(np.where(telvec == tels[i]))         
-#        stot[a] = np.sqrt(srv[a]**2 + newpars[-ntel+i]**2)
+    for i in range(ntel):
+        a = np.squeeze(np.where(telvec == tels[i]))         
+        stot[a] = np.sqrt(srv[a]**2 + newpars[-ntel+i]**2)
 
-    stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
+#    stot = np.sqrt(srv**2 + newpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
     chisq = -0.5*np.sum((rv - model)**2/stot**2)
@@ -1063,10 +1086,10 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloa
     tels = np.unique(telvec)
     ntel = tels.size
     stot = np.zeros(telvec.size)
-#    for i in range(ntel):
-#        a = np.squeeze(np.where(telvec == tels[i]))         
-#        stot[a] = np.sqrt(srv[a]**2 + newpars[-ntel+i]**2)
-    stot = np.sqrt(srv**2 + bestpars[-1]**2) #add floating jitter term
+    for i in range(ntel):
+        a = np.squeeze(np.where(telvec == tels[i]))         
+        stot[a] = np.sqrt(srv[a]**2 + bestpars[-ntel+i]**2)
+#    stot = np.sqrt(srv**2 + bestpars[-1]**2) #add floating jitter term
 
     l0 = np.sum(np.log(1/(np.sqrt(2*np.pi)*stot))) #penalize high jitter values
     chisq = -0.5*np.sum((rv - model)**2/stot**2)
@@ -1081,15 +1104,16 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     else:
         ntel = 1
 
-#    if jitter.size < ntel:
-#        jitter = np.ones(ntel)*jitter
+    if jitter.size < ntel:
+        jitter = np.ones(ntel)*jitter
+    print 'jitter: ',jitter
 
     bestpars = np.copy(m.params)
     bestpars = np.append(bestpars,jitter) #add placeholder for jitter
-    pnames = np.copy(m.pnames)
-#    jnames = ['jitter']*ntel
-#    pnames = np.append(pnames,jnames)
-    pnames = np.append(pnames,'jitter')
+    pnames = m.pnames
+    jnames = ['jitter']*ntel
+#    pnames.append(jnames)
+    pnames = np.append(pnames,jnames)
     print 'smaller gaussian prior'
 
     #p = orbel[0+i*6]
@@ -1102,7 +1126,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     #quad = orbel[1+norbits*6]
     #cubic = orbel[2+norbits*6]
     #quart = orbel[3+norbits*6]
-    #jitter = orbel[-1]
+    #jitter = orbel[-ntel:]
 
     npars = bestpars.size
 
@@ -1127,8 +1151,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         
         #fix/limit period:
         if psig[i]> 0:
-            plo[0+i*6] = porig[i] - 10*psig[i]
-            phi[0+i*6] = porig[i] + 10*psig[i]  
+            plo[0+i*6] = porig[i] - 5*psig[i]#1000*psig[i]
+            phi[0+i*6] = porig[i] + 5*psig[i]#1000*psig[i]  
         else:
             plo[0+i*6] = 0.1
             phi[0+i*6] = (np.max(jdb)-np.min(jdb))*20 
@@ -1137,8 +1161,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         
 
         #limit Tp - within just over a full orbit
-        plo[1+i*6] = bestpars[1+i*6]-bestpars[0+i*6]*0.8
-        phi[1+i*6] = bestpars[1+i*6]+bestpars[0+i*6]*0.8
+        plo[1+i*6] = bestpars[1+i*6]-bestpars[0+i*6]*0.6
+        phi[1+i*6] = bestpars[1+i*6]+bestpars[0+i*6]*0.6
 
         #fix/limit ecc
         if circ[i] == 1:
@@ -1193,8 +1217,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
             ind = i + norbits*6 + npoly + ntel-1
             
             if ttsig[i] > 0: #let float with limited range
-                plo[ind] = bestpars[ind] - 10*ttsig[i]
-                phi[ind] = bestpars[ind] + 10*ttsig[i]
+                plo[ind] = bestpars[ind] - 5*ttsig[i]#1000*ttsig[i]
+                phi[ind] = bestpars[ind] + 5*ttsig[i]#1000*ttsig[i]
 
                 #now tie other params...
                 if circ[i] == 1:
@@ -1219,10 +1243,10 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
         print 'adding ',str(jitter),'m/s fixed jitter '
         bestpars[-ntel:] = jitter
         flt[-ntel:] = 0
-    plo[-1] = 0.001
-    phi[-1] = 5.0
-#    plo[-ntel:] = 0.000
-#    phi[-ntel:] = 5.0
+#    plo[-1] = 0.001
+#    phi[-1] = 5.0
+    plo[-ntel:] = 0.000
+    phi[-ntel:] = 5.0
 
 #    print pnames
 #    print flt
@@ -1236,6 +1260,8 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     varpars = bestpars[f]
     ndim = varpars.size
     
+    print pnames
+
     print 'MCMC params: ',pnames[f] 
     print 'guesses from LM: ',varpars
 
