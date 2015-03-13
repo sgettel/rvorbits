@@ -14,11 +14,12 @@ import triangle
 import numpy as np
 import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as grd
 import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=300,fixjit='no',storeflat='no',storechain='no',tfix=0):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0'):
 
     tag = ''
     if npoly > 4:
@@ -37,6 +38,9 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
             tag += '_circ'
         else:
             tag += '_ecc'
+
+    tag += '_'+str(npoly)
+    tag += '_'+str(nsteps)
 
     host = socket.gethostname()
     if "macbook" in host:
@@ -62,10 +66,6 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
         rv[80:] += 80.0 #+ np.random.randn(telvec.size-80) #noiser data with offset
         rvnorm = rv - np.median(rv)
 
-#    elif targname == 'XO3':
-#        sfile = open(home+'Dropbox/cfasgettel/py.lib/sgcode/rvorbits/xo3.vel.txt')
-#        jdb, rv, srv,telvec = np.loadtxt(sfile,unpack=True,usecols=(0,1,2,3))
-#        rvnorm = rv - np.median(rv)
 #    elif targname == 'K00069':
 #        sfile = open(home+'Dropbox/cfasgettel/research/papers_collab/kep93_harpsn_data_4test.txt')
 #        jdb, rv, srv = np.loadtxt(sfile,unpack=True,usecols=(0,1,2),skiprows=1)
@@ -192,15 +192,14 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
     
     if targname == 'K00273':
 
-##################### UPDATE
 
-        guesspars = np.array([10.573737, 2455008.06787, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0])
+
+        guesspars = np.array([10.573763, 2455008.0671344, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0])
         ttime = np.array([1,0])
 
 
-    #transit = np.array([2455008.06787,0.0])
-        psig = np.array([6.1e-6,0.0])
-        tsig = np.array([0.00061,0.0])
+        psig = np.array([8.5e-6,0.0])
+        tsig = np.array([0.00078,0.0])
         porig = guesspars[0+ip*6]
         torig = guesspars[1+ip*6] - epoch
         
@@ -283,18 +282,15 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
             m.params[i+norbits*6+npoly] = 0
         
         #make plots & restore offset
-        res0 = plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,keck=keck,ttime=ttime)
+        res0 = plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,keck=keck,ttime=ttime,tag=tag)
         m.params = par0
        
         #call MCMC    
         if nwalkers > 0:
             #mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,ttfloat=ttfloat,ttsig=ttsig,fixjit=fixjit)
 
-            mcbest, bestpars, mcnames, flt, samples, mcpars, chain = setup_emcee_new(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, ttime=ttime, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,tfix=tfix,tsig=tsig,fixjit=fixjit,torig=torig)
+            mcbest, bestpars, mcnames, flt, mcpars, chain = setup_emcee_new(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, ttime=ttime, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,tfix=tfix,tsig=tsig,fixjit=fixjit,torig=torig)
 
-            #save chain...
-            if storechain == 'yes':
-                store_chain(targname, mcnames, flt, chain, m, home=home)
 
             #correct offset before plotting
             rvp = np.copy(rvnorm)
@@ -306,10 +302,10 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
                 rvp[a] -= mcbest[i+norbits*6+npoly]
                 mcbest[i+norbits*6+npoly] = 0
             
-            pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck,ttime=ttime)
+            pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck,ttime=ttime,tag=tag)
             
             if storeflat == 'yes':
-                f = open(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_rvflat.dat','w')
+                f = open(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_rvflat.dat','w')
                 f.write('#tnorm    res    srv    tel            \n') 
                 for i in range(tnorm.size):
                     
@@ -333,11 +329,11 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
             psrf = gelman_rubin(chain)
 
            
-            #make a nice triangle plot
-            f = np.squeeze(flt.nonzero())
-            fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f]) 
-            fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_triangle.pdf')
-            plt.close(fig)
+            ##make a nice triangle plot
+            #f = np.squeeze(flt.nonzero())
+            #fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f]) 
+            #fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
+            #plt.close(fig)
 
             
 
@@ -351,9 +347,25 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568e6,circ=0,maxrv=1e6,min
 
             
         
-        write_full_soln(m, targname, mpsini, a2sini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, tfix=tfix, tsig=tsig,mbic=bic,psrf=psrf, a2arr_all=a2arr_mc,home=home,ttime=ttime)
+        write_full_soln(m, targname, mpsini, a2sini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, tfix=tfix, tsig=tsig,mbic=bic,psrf=psrf, a2arr_all=a2arr_mc,home=home,ttime=ttime,tag=tag)
 
-    return m, chain, mparr_mc, mcpars
+        #store data as binary
+        #np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
+        if home == '/home/sgettel/' and hd == 0:
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mcnames.dat',mcnames)
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_flt.dat',flt)
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_bestpars.dat',bestpars)
+        else:
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mcnames.dat',mcnames)
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_flt.dat',flt)
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_bestpars.dat',bestpars)
+        
+
+    return m, chain, mparr_mc, mcpars, mcnames, flt, bestpars, tag 
 
 def fromeccom(ecc,om):
     #need om in radians
@@ -403,7 +415,7 @@ def calc_bic_mc(mcbest,flt,jdb,rv,srv,norbit,npoly,telvec, ttime, tsig, tfix,cir
     return bic
      
 
-def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0,keck='no',ttime=0):
+def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits=1,npoly=0,telvec=-1,mc=0,keck='no',ttime=0,tag=''):
     print 'ttime: ',ttime
     if mc > 0:
         usepars = np.copy(gpars) #this is mcbest...
@@ -414,10 +426,11 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     else:
         usepars = np.copy(m.params)
 
-    #print 'plot pars:', usepars
+   
     tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
 
     model_final = rv_drive_new(usepars,tmod,norbits,npoly,telvec,ttime)
+    res1 = rv - rv_drive_new(usepars,jdb,norbits,npoly,telvec,ttime)
     
     if npoly > 0:
         parst =  np.copy(usepars) 
@@ -426,21 +439,32 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
 
     k = np.squeeze(np.where(telvec == 1))
 
-    #unphased data
+    #unphased data, now with residuals!
     plt.figure(1)
+    gs = grd.GridSpec(2,1, height_ratios=[3,1])
+    ax1 = plt.subplot(gs[0])
     plt.errorbar(jdb,rv,yerr=srv,fmt='bo')
     if keck == 'yes':
         plt.errorbar(jdb[k],rv[k],yerr=srv[k],fmt='go') 
     plt.plot(tmod,model_final,'r-')
-    plt.xlabel('Adjusted BJD')
+    #plt.xlabel('Adjusted BJD')
     plt.ylabel('Normalized RV (m/s)')
-    #if npoly > 0:
-    #    plt.plot(tmod,poly,'g-')
-    
+
+    ax2 = plt.subplot(gs[1])
+    plt.errorbar(jdb,res1,yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(jdb[k],res1[k],yerr=srv[k],fmt='go') 
+    plt.plot(tmod,np.zeros_like(tmod),'k-')
+    plt.xlabel('Adjusted BJD')
+    plt.ylabel('Residuals (m/s)')
+
     if mc > 0:
-       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot_mc.pdf') 
+       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_autoplot_mc.pdf') 
+       plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_autoplot_mc.png')
     else:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_autoplot.pdf')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_autoplot.pdf')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_autoplot.png')
+
     plt.close(1)
 
     #phase at 1st period
@@ -457,17 +481,31 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     telvec = np.zeros_like(tmod)
 
     plt.figure(2)
+    gs = grd.GridSpec(2,1, height_ratios=[3,1])
+    ax1 = plt.subplot(gs[0])
     plt.errorbar(phase, rv-rvt, yerr=srv,fmt='bo')
     if keck == 'yes':
         plt.errorbar(phase[k],rv[k]-rvt[k],yerr=srv[k],fmt='go') 
     plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
-    plt.xlabel('Orbital Phase')
+    #plt.xlabel('Orbital Phase')
     plt.ylabel('Normalized RV (m/s)')
     #plt.plot((tmod - guess))
+
+    ax2 = plt.subplot(gs[1])
+    res2 = rv - rvt - rv_drive_new(pars,jdb,1,0,telvec,ttime)
+    plt.errorbar(phase,res2,yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(phase[k],res2[k],yerr=srv[k],fmt='go') 
+    plt.plot((tmod- pars[1])/pars[0] % 1.0,np.zeros_like(tmod),'k-')
+    plt.xlabel('Orbital Phase')
+    plt.ylabel('Residuals (m/s)')
+
     if mc > 0:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot_mc.pdf')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_phase_autoplot_mc.pdf')
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_phase_autoplot_mc.png')
     else:
-        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_autoplot.pdf') 
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_phase_autoplot.pdf') 
+        plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_phase_autoplot.png')
     plt.close(2)
     
     return pres
@@ -498,7 +536,7 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
 #    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_hist.png')
 #    plt.close()
 
-def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0):
+def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,tag=''):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
 
@@ -506,7 +544,7 @@ def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbi
         tels = np.unique(telvec)
         ntel = np.unique(telvec).size
     
-    f = open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_orbit.dat','w')
+    f = open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_orbit.dat','w')
     for i in range(norbits):
         f.write('                                               \n') 
         f.write('*****Planet '+str(i+1)+' Solution:***** \n')
@@ -695,7 +733,7 @@ def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     else:
         return dpl
 
-
+#def radius_estimate()
    
 
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=0,epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1,tfix='no',tsig=-1):
@@ -776,17 +814,7 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=
             m.lm_prob.p_value(5+i*6, 0.0, fixed=True)
             flt[5+i*6] = 0
 
-        #now include fixed transit time effects
-#        if not tt[i] == 0:
-#            if circ[i] == 1:  #by convention tt=tp & omega=90
-#                m.lm_prob.p_value(1+i*6, tt[i], fixed=True)
-#                m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
-#                flt[1+i*6] = 0
-#                flt[3+i*6] = 0
-#            else:
-#                tiefunc = tie_omega_function(tt, i) #how does this know what orbel is?
-#                m.lm_prob.p_tie(3+i*6, tiefunc)
-#                flt[3+i*6] = 0
+ 
 
     #limit polynomial terms
     for i in range(npoly):
@@ -799,61 +827,12 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=
         m.lm_prob.p_limit(i + norbits*6 + npoly, lower=-1e6, upper=1e6)
 
     
-#    #transit time must be either fixed or constrained with ttsig
-#    #allow for variable transit time
-#    if ttfloat == 'yes':
-#        for i in range(norbits):
-#            ind = i + norbits*6 + npoly + ntel-1
-#
-#            if ttsig[i] > 0:        #let float with limited range
-                
-                #m.lm_prob.p_limit(ind, lower=orbel[ind]-5*ttsig[i], upper=orbel[ind]+5*ttsig[i])
-                #now tie other parameters...
-                #if circ[i] == 1: #by convention tt=tp & omega=90
-                #   m.lm_prob.p_value(3+i*6, 90.0, fixed=True)
-                #    tiefunc2 = tie_tp_function(tt,i)
-                #    m.lm_prob.p_tie(1+i*6, tiefunc2)
-                #    flt[1+i*6] = 0
-                #    flt[3+i*6] = 0
-                #else: #tie omega to tt & tp
-                #    tiefunc  = tie_omega_function(tt,i)
-                #    m.lm_prob.p_tie(3+i*6, tiefunc)
-                #    flt[3+i*6] = 0
-                
-            #else:  #fix at original value
-            #    m.lm_prob.p_value(ind, tt[i], fixed=True)
-    #else test that you have the right number of orbit params...
-    
+
 
     m.solve(orbel)
    
     return m, flt
 
-#def tie_tp_function(tt,i):
-#    def calculate_tp(orbel):
-
-#        tp = tt[i]
-#        return tp
-
-#def tie_omega_function(tt, i):
-
-#    def calculate_omega(orbel):
-        
-#        p = orbel[0+i*6]
-#        tp = orbel[1+i*6]
-#        ecc = orbel[2+i*6]
-
-#        theta_tt = calc_true_anomaly(p, tp, ecc, tt[i]) #in radians
-#        omega = (np.pi/2.0 - theta_tt)*180.0/np.pi
-         
-#        if omega < 0:
-#            omega += 360.0
-#        if omega > 360.0:
-#            omega -= 360.0
-        
-#        return omega
-
-#    return calculate_omega
 
 
 def rv_drive_new(orbel, t, norbits, npoly, telvec, ttime):
@@ -988,64 +967,11 @@ def rv_drive_mc_new(orbel, t, norbits, npoly, telvec, ttime, tsig, tfix,circ):
             tp = t0
 
 
-#        #if transit time set
-#        if not tt[i] == 0:
-#            #if fixed, use tt[i] else use orbel[tind]
-#            if ttfloat == 'no': #use default value
-#                if circ[i] == 1:
-#                    tp = tt[i]
-#                    om = 90.0*np.pi/180.0
-#                else:
-                    
-#                    #calc tp
-#                    theta_tt = np.pi/2.0 - om
-#                    argt = np.tan(theta_tt/2.)*np.sqrt((1.-ecc)/(1.+ecc))
-#                    eccanom_tt = 2.*np.arctan(argt)
-#                    meananom_tt = eccanom_tt - ecc*np.sin
-#                    phase = meananom_tt/(2.*np.pi)
-#                    tp = tt[i] - phase*p
-    
-        #theta_tt = calc_true_anomaly(p, tp, ecc, tt[i])
-        #om = (np.pi/2.0 - theta_tt)*180.0/np.pi
-        
-        #om = om % 360.0
-        
-        
-#        elif ttfloat == 'yes' and ttsig[i] > 0: #use value from orbel
-#            tind = i + norbits*6 + npoly + ntel-1
-#                tti = orbel[tind]
-#                if circ[i] == 1:
-#                    tp = tti
-#                    om = 90.0*np.pi/180.0
-#            else:
-                
-                #calc tp
-#                theta_tt = np.pi/2.0 - om
-#                    argt = np.tan(theta_tt/2.)*np.sqrt((1.-ecc)/(1.+ecc))
-#                    eccanom_tt = 2.*np.arctan(argt)
-#                    meananom_tt = eccanom_tt - ecc*np.sin(eccanom_tt)
-#                    mphase = meananom_tt/(2.*np.pi)
-#                    tp = tt[i] - mphase*p
-#print 'tp: ',tp
-#theta_tt = calc_true_anomaly(p, tp, ecc, tti)
-#om = (np.pi/2.0 - theta_tt)*180.0/np.pi
-#om = om % 360.0
-
-
-#print tp, om
-
 
 
         theta = calc_true_anomaly(p, tp, ecc, t)
     
-    
-        #phase0 = theta + om - np.pi/2.0
-        #under = np.squeeze(np.where(phase0 < -np.pi))
-        #phase0[under] += np.pi
-#       over = np.squeeze(np.where(phase0 >= np.pi))
-#        phase0[over] -= np.pi
-        
-        #phase[:,i] = phase0
+
         
         #calculate radial velocity
         epoch = 0.0 #Yes, epoch corrected elsewhere
@@ -1501,7 +1427,7 @@ def setup_emcee_new(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0,
     mcbest = np.percentile(mcpars,50, axis=0)
     
 #return m, flt, chain, samples, mcpars
-    return mcbest, mcin, mcnames, flt, samples, mcpars, chain
+    return mcbest, mcin, mcnames, flt, mcpars, chain
 
 ##########################################################################
 def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, norbits=1, tt=np.zeros(1),jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,ttfloat='yes',ttsig=-1,fixjit='no'):
@@ -1724,7 +1650,7 @@ def setup_emcee(targname, m, jdb, rv, srv_in, nwalkers=200, circ=0, npoly=0, nor
     mcbest = np.percentile(mcpars,50, axis=0)
 
     #return m, flt, chain, samples, mcpars
-    return mcbest, mcin, mcnames, flt, samples, mcpars, chain
+    return mcbest, mcin, mcnames, flt, mcpars, chain
 ############################################################################
 
 def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, termspp, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=-1,porig=-1,ttime=0,tsig=-1,tfix=0,circ=0,torig=-1):
@@ -1776,15 +1702,168 @@ def gelman_rubin(chain):
     print 'Reduction factor: ', R
     return R
 
-def store_chain(targname, mcnames, flt, chain, m, home='/home/sgettel'):
-    store = shelve.open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_chain.dat')
+def store_chain(targname, mcnames, flt, samples, m, home='/home/sgettel',tag=''):
+    store = shelve.open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat')
     
     store['mcnames'] = mcnames
     store['flt'] = flt
     
-    store['chain'] = chain
+    store['samples'] = samples
     store['m.params'] = m.params
     store.close()
 
     print 'chain data saved'
     
+
+def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nburn, ndim,home='/home/sgettel',tag=''):
+
+    #store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
+
+    f = np.squeeze(flt.nonzero())
+    samples = chain[:, nburn:, :].reshape((-1, ndim))
+    fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f])
+    fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
+    fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.png')
+    plt.close(fig)
+
+    store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
+
+    return
+
+def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
+    
+    jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxrv=-50000,maxsrv=5)
+    jdb += 2.4e6 #because process_all gives truncated JDBs
+    telvec = np.zeros_like(jdb)
+    print jdb.size,' HARPS-N obs'
+    
+    if keck == 'yes':
+        
+        sfile = open(home+'Dropbox/cfasgettel/research/keck/'+targname+'_full.dat')
+        kjdb, krv, ksrv, mdchi, kcts = np.loadtxt(sfile,unpack=True,usecols=(2,3,4,5,6),skiprows=3)
+        print np.mean(ksrv), ' typical Keck error '
+            
+        kjdb = kjdb + 2.44e6
+            
+            
+        krvnorm = krv - np.median(krv)
+        ktel = np.ones_like(kjdb)
+            
+        jdb = np.append(jdb,kjdb)
+        rvnorm = rv - np.median(rv)
+        rvnorm = np.append(rvnorm,krvnorm)
+        srv = np.append(srv,ksrv)
+        telvec = np.append(telvec,ktel)
+        print kjdb.size,' Keck obs'
+    else:
+        rvnorm = rv - np.median(rv)
+    jdb = jdb - epoch #truncate
+    medrv = np.median(rv)
+    
+    #path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_circ_ecc_1_50002'
+    path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_ecc_ecc_1_80002'
+    
+    mcpars = np.load(path+'_mcpars.dat.npy')
+    mcnames = np.load(path+'_mcnames.dat.npy')
+    mcbest = np.percentile(mcpars,50, axis=0)
+    
+    #mcbest = np.copy(gpars) #this is mcbest...
+    for i in range(norbits):
+        ecc, om0 = toeccom(mcbest[2+i*6],mcbest[3+i*6])
+        mcbest[2+i*6] = ecc
+        mcbest[3+i*6] = om0*180/np.pi
+    
+    
+    tmod = np.linspace(np.min(jdb),np.max(jdb),nmod)
+
+    model_final = rv_drive_new(mcbest,tmod,norbits,npoly,telvec,ttime)
+    res1 = rvnorm - rv_drive_new(mcbest,jdb,norbits,npoly,telvec,ttime)
+    
+    if npoly > 0:
+        parst =  np.copy(mcbest)
+        parst[4] = 0.0
+        poly = rv_drive_new(parst,tmod,norbits,npoly,telvec,ttime)
+
+    k = np.squeeze(np.where(telvec == 1))
+    
+    #unphased data, now with residuals!
+    plt.figure(1)
+    gs = grd.GridSpec(2,1, height_ratios=[3,1])
+    ax1 = plt.subplot(gs[0])
+    plt.errorbar(jdb,rvnorm,yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(jdb[k],rvnorm[k],yerr=srv[k],fmt='go')
+    plt.plot(tmod,model_final,'r-')
+    #plt.xlabel('Adjusted BJD')
+    plt.ylabel('Normalized RV (m/s)')
+
+    ax2 = plt.subplot(gs[1])
+    plt.errorbar(jdb,res1,yerr=srv,fmt='bo')
+    if keck == 'yes':
+        plt.errorbar(jdb[k],res1[k],yerr=srv[k],fmt='go')
+    plt.plot(tmod,np.zeros_like(tmod),'k-')
+    plt.xlabel('Adjusted BJD')
+    plt.ylabel('Residuals (m/s)')
+    
+    
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_afterplot.pdf')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_afterplot.png')
+
+    plt.close(1)
+    
+    #phase at 1st period
+    pars = mcbest[0:6]  #for model
+    pars[6:] = 0 #select first planet only
+    
+    parst = np.copy(mcbest)
+    parst[4] = 0.0 #other planets only
+    parst[5] = 0.0
+    phase = (jdb - pars[1])/pars[0] % 1.0
+    
+    rvt = rv_drive_new(parst,jdb,norbits,npoly,telvec,ttime)
+    pres = (rvnorm-rvt) - pars[5]
+    telvec = np.zeros_like(tmod)
+    
+    plt.figure(2)
+    gs = grd.GridSpec(2,1, height_ratios=[3,1])
+    ax1 = plt.subplot(gs[0])
+    plt.errorbar(phase, rvnorm-rvt, yerr=srv,fmt='bo')
+    plt.errorbar(phase+1, rvnorm-rvt, yerr=srv,fmt='bo',mfc='none')
+    plt.errorbar(phase-1, rvnorm-rvt, yerr=srv,fmt='bo',mfc='none')
+
+    if keck == 'yes':
+        plt.errorbar(phase[k],rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',)
+        plt.errorbar(phase[k]+1,rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',mfc='none')
+        plt.errorbar(phase[k]-1,rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',mfc='none')
+
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 +1, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 -1, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
+
+    #plt.xlabel('Orbital Phase')
+    plt.ylabel('Normalized RV (m/s)')
+    #plt.plot((tmod - guess))
+    plt.xlim([-0.25,1.25])
+
+    ax2 = plt.subplot(gs[1])
+    res2 = rvnorm - rvt - rv_drive_new(pars,jdb,1,0,telvec,ttime)
+    plt.errorbar(phase,res2,yerr=srv,fmt='bo')
+    plt.errorbar(phase+1,res2,yerr=srv,fmt='bo',mfc='none')
+    plt.errorbar(phase-1,res2,yerr=srv,fmt='bo',mfc='none')
+    if keck == 'yes':
+        plt.errorbar(phase[k],res2[k],yerr=srv[k],fmt='go')
+        plt.errorbar(phase[k]+1,res2[k],yerr=srv[k],fmt='go',mfc='none')
+        plt.errorbar(phase[k]-1,res2[k],yerr=srv[k],fmt='go',mfc='none')
+    plt.plot(np.linspace(-0.25,1.25,num=tmod.size),np.zeros_like(tmod),'k-')
+    #plt.plot((tmod- pars[1])/pars[0] % 1.0 + 1,np.zeros_like(tmod),'k-')
+    #plt.plot((tmod- pars[1])/pars[0] % 1.0 - 1,np.zeros_like(tmod),'k-')
+    plt.xlabel('Orbital Phase')
+    plt.ylabel('Residuals (m/s)')
+    plt.xlim([-0.25,1.25])
+    
+    
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_afterplot.pdf')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_afterplot.png')
+    plt.close(2)
+    
+#return pres
