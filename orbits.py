@@ -192,20 +192,28 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     
     if targname == 'K00273':
 
-
-
         guesspars = np.array([10.573763, 2455008.0671344, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0])
         ttime = np.array([1,0])
-
 
         psig = np.array([8.5e-6,0.0])
         tsig = np.array([0.00078,0.0])
         porig = guesspars[0+ip*6]
         torig = guesspars[1+ip*6] - epoch
         
+        #from literature
         mstar = 1.069
-        rpl = 1.854 #Me
-        rple = 0.041
+        rs = 1.081 #stellar radius
+        ers = 0.019
+
+        #from transit re-fit
+        rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
+        rpl, rple = radius_estimate(rprs,rs,ers)
+        arstar = np.array([44.733919,8.3693767,3.2092898])
+
+        #also from transit re-fit
+        imp = np.array([0.38190291,0.26185766,0.28049118])
+        #rpl = 1.854 #Me
+        #rple = 0.041
         inc = 89.9771
         ince = 0.30
 
@@ -287,7 +295,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
        
         #call MCMC    
         if nwalkers > 0:
-            #mcbest, bestpars, pnames, flt, samples, mcpars, chain = setup_emcee(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, tt=transit, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,ttfloat=ttfloat,ttsig=ttsig,fixjit=fixjit)
+           
 
             mcbest, bestpars, mcnames, flt, mcpars, chain = setup_emcee_new(targname, m, tnorm, rvnorm, nsrv, circ=circ, npoly=npoly, ttime=ttime, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,tfix=tfix,tsig=tsig,fixjit=fixjit,torig=torig)
 
@@ -326,16 +334,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             print 'MC BIC:          ',str(bic)
 
             #convergence testing...
-            psrf = gelman_rubin(chain)
-
-           
-            ##make a nice triangle plot
-            #f = np.squeeze(flt.nonzero())
-            #fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f]) 
-            #fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
-            #plt.close(fig)
-
-            
+            psrf = gelman_rubin(chain)            
 
         else:
             mcpars = -1
@@ -607,11 +606,11 @@ def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbi
             f.write('a2*sin(i): '+str(a2best)+' +'+str(a2hi-a2best)+' -'+str(a2best-a2lo)+'\n')
 
             if i == 0:
-                dpbest = np.percentile(mcdpl[:], 50)
-                dphi = np.percentile(mcdpl[:], 84)
-                dplo = np.percentile(mcdpl[:], 16)
-                #print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
-                f.write('density: '+str(dpbest)+' +'+str(dphi-dpbest)+' -'+str(dpbest-dplo)+'\n')
+                dpbest = mcdpl[0]
+                edplo = mcdpl[1]
+                edphi = mcdpl[2]
+                
+                f.write('density: '+str(dpbest)+' +'+str(edphi)+' -'+str(edplo)+'\n')
 
         for i in range(npoly):
             f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
@@ -669,10 +668,16 @@ def print_mc_errs(mcpars, mpsini, a2sini, mparr_all, a2arr_all,norbits=1,npoly=0
         print 'mass error:', str((mphi-mpbest)/mpbest*100),',',str((mpbest-mplo)/mpbest*100), '%'
         print 'a2*sin(i): ',str(a2best),' +',str(a2hi-a2best),' -',str(a2best-a2lo)
         if i == 0:
-            dpbest = np.percentile(mcdpl[:], 50)
-            dphi = np.percentile(mcdpl[:], 84)
-            dplo = np.percentile(mcdpl[:], 16)
-            print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
+            dpbest = mcdpl[0]
+            edplo = mcdpl[1]
+            edphi = mcdpl[2]
+                
+            print 'density: '+str(dpbest)+' +'+str(edphi)+' -'+str(edplo)
+
+            #dpbest = np.percentile(mcdpl[:], 50)
+            #dphi = np.percentile(mcdpl[:], 84)
+            #dplo = np.percentile(mcdpl[:], 16)
+            #print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
     
     for i in range(npoly):
         print str(poly_names[i]), str(mcbest[i+norbits*6]),' +',str(mchi[i+norbits*6]-mcbest[i+norbits*6]),' -',str(mcbest[i+norbits*6]-mclo[i+norbits*6])
@@ -725,7 +730,8 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
         return mpsini, a2sini
 
 def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
-    
+    #first planet only...
+
     rpl = ut.arrayify(rpl)
     nplanets = rpl.size
 
@@ -735,13 +741,40 @@ def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     dpl = mpsini[0]*5.973e27/vol
 
     if len(np.array(mcmass).shape) > 0:
-        mcdpl = mcmass[0,:]*5.973e27/vol
+        mpbest = np.percentile(mcmass[0,:], 50)
+        mphi = np.percentile(mcmass[0,:], 84)
+        mplo = np.percentile(mcmass[0,:], 16)
+        mperr = ((mphi-mpbest)+(mpbest-mplo))/2 #assume nearly Gaussian...
+
+        dpl = mpbest*5.973e27/vol
+
+        relerrsq = (mperr/mpbest)**2+(3*rple/rpl) #lo,hi
+        edpl = np.sqrt(dpl**2*relerrsq) 
+        mcdpl = np.concatenate([dpl, edpl])
+        print mcdpl.shape, mcdpl
+        
         return mcdpl
     else:
         return dpl
 
-#def radius_estimate()
-   
+def radius_estimate(rr,rs,ers):
+
+    #assuming symmetric errors on stellar radius...
+
+    rprs = rr[0]*np.ones(1)
+    erprs = np.array([rr[1],rr[2]]) #lo, hi
+
+    rp = rprs * rs * 6.9599e8/6.37814e6 #earth radii
+    erp = np.sqrt((ers/rs)**2 + (erprs/rprs)**2)*rp
+
+    return rp, erp 
+
+def inclination_estimate(arstar,b):
+    cosi = b/arstar
+    inc = np.arccos(cosi)*180.0/np.pi #degrees
+
+#    ince = 
+
 
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=0,epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1,tfix='no',tsig=-1):
     #p = orbel[0+i*6]
@@ -1733,7 +1766,7 @@ def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nburn, n
     fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.png')
     plt.close(fig)
 
-    store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
+    #store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
 
     return
 
