@@ -91,7 +91,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
 
         print targname
-        jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv,webdat=webdat)
+        jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk, exptime = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv,webdat=webdat)
         jdb += 2.4e6 #because process_all gives truncated JDBs
         telvec = np.zeros_like(jdb)
         print jdb.size,' HARPS-N obs'
@@ -347,7 +347,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
             
         
-        write_full_soln(m, targname, mpsini, a2sini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, tfix=tfix, tsig=tsig,mbic=bic,psrf=psrf, a2arr_all=a2arr_mc,home=home,ttime=ttime,tag=tag)
+        write_full_soln(m, targname, mpsini, a2sini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, tfix=tfix, tsig=tsig,mbic=bic,psrf=psrf, a2arr_all=a2arr_mc,home=home,ttime=ttime,tag=tag,mcdpl=dpl)
 
         #store data as binary
         #np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
@@ -536,7 +536,7 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
 #    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_hist.png')
 #    plt.close()
 
-def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,tag=''):
+def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,tag='',mcdpl=-1):
     
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
 
@@ -605,6 +605,13 @@ def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbi
             f.write('mp*sin(i): '+str(mpbest)+' +'+str(mphi-mpbest)+' -'+str(mpbest-mplo)+'\n')
             f.write('mass error:'+ str((mphi-mpbest)/mpbest*100)+','+str((mpbest-mplo)/mpbest*100)+ '%'+'\n') 
             f.write('a2*sin(i): '+str(a2best)+' +'+str(a2hi-a2best)+' -'+str(a2best-a2lo)+'\n')
+
+            if i == 0:
+                dpbest = np.percentile(mcdpl[:], 50)
+                dphi = np.percentile(mcdpl[:], 84)
+                dplo = np.percentile(mcdpl[:], 16)
+                #print 'density: ',str(dpbest),' +',str(dphi-dpbest),' -',str(dpbest-dplo)
+                f.write('density: '+str(dpbest)+' +'+str(dphi-dpbest)+' -'+str(dpbest-dplo)+'\n')
 
         for i in range(npoly):
             f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
