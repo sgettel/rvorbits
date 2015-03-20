@@ -212,10 +212,11 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
         #also from transit re-fit
         imp = np.array([0.38190291,0.26185766,0.28049118])
+        #inc,ince = inclination_estimate()
         #rpl = 1.854 #Me
         #rple = 0.041
-        inc = 89.9771
-        ince = 0.30
+        #inc = 89.9771
+        #ince = 0.30
 
 
     if targname == 'K00069':
@@ -773,7 +774,12 @@ def inclination_estimate(arstar,b):
     cosi = b/arstar
     inc = np.arccos(cosi)*180.0/np.pi #degrees
 
-#    ince = 
+    berr = np.mean(b[1:3]) #assume nearly symmetric
+    
+
+    ince = np.sqrt(berr**2*(1./(arstar[0]**2 - b[0]**2)) + arstar[1:3]**2*(1./(arstar[0]**4*(1-b[0]/arstar[0]))))
+
+    return inc, ince
 
 
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=0,epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1,tfix='no',tsig=-1):
@@ -1758,9 +1764,10 @@ def store_chain(targname, mcnames, flt, samples, m, home='/home/sgettel',tag='')
 def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nburn, ndim,home='/home/sgettel',tag=''):
 
     #store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
+    #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
 
     f = np.squeeze(flt.nonzero())
-    samples = chain[:, nburn:, :].reshape((-1, ndim))
+    samples = chain[:, nburn:, :].reshape((-1, ndim)) #this is redundant, use mcpars...
     fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f])
     fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
     fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.png')
