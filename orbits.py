@@ -365,7 +365,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_bestpars.dat',bestpars)
         
 
-    return m, chain, mparr_mc, mcpars, mcnames, flt, bestpars, tag 
+    return m, chain, mparr_mc, mcpars, mcnames, flt, bestpars, tag, nwalkers, nsteps, nburn 
 
 def fromeccom(ecc,om):
     #need om in radians
@@ -1748,34 +1748,63 @@ def gelman_rubin(chain):
     print 'Reduction factor: ', R
     return R
 
-def store_chain(targname, mcnames, flt, samples, m, home='/home/sgettel',tag=''):
-    store = shelve.open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat')
+#def store_chain(targname, mcnames, flt, samples, m, home='/home/sgettel',tag=''):
+#    #NOT USED
+#    store = shelve.open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat')
     
-    store['mcnames'] = mcnames
-    store['flt'] = flt
+#    store['mcnames'] = mcnames
+#    store['flt'] = flt
     
-    store['samples'] = samples
-    store['m.params'] = m.params
-    store.close()
+#    store['samples'] = samples
+#    store['m.params'] = m.params
+#    store.close()
 
-    print 'chain data saved'
+#    print 'chain data saved'
     
 
-def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nburn, ndim,home='/home/sgettel',tag=''):
+def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nsteps, nburn,home='/home/sgettel',tag='',nwalkers=200):
 
-    #store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
-    #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
+    #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin] - post-burn-in only!
 
     f = np.squeeze(flt.nonzero())
-    samples = chain[:, nburn:, :].reshape((-1, ndim)) #this is redundant, use mcpars...
-    fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f])
+    
+    print 'f defined'
+    ndim = f.size
+    #samples = chain[:, nburn:, :].reshape((-1, ndim)) #this is redundant, use mcpars...
+    #print 'samples defined'
+    #fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f])
+    fig = triangle.corner(mcpars[:,f], labels=mcnames[f], truths=bestpars[f])
+    print 'triangle made'
+
     fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
     fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.png')
     plt.close(fig)
 
-    #store_chain(targname, mcnames, flt, samples, m, home=home,tag=tag)
 
     return
+
+def make_triangle_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/'):
+
+    #restore variables
+    mcpars = np.load(path+basename+'_mcpars.dat.npy')
+    mcnames = np.load(path+basename+'_mcnames.dat.npy')
+    flt = np.load(path+basename+'_flt.dat.npy')
+    bestpars = np.load(path+basename+'_bestpars.dat.npy')
+
+    f = np.squeeze(flt.nonzero())
+    
+    #use subsample if large number of steps - does this help?
+    if mcpars.shape[0] > 4000000:
+        sub = np.random.randint(0,mcpars.shape[0],size=4000000)
+        mcpars = mcpars[:,f]
+        fig = triangle.corner(mcpars[sub,:], labels=mcnames[f], truths=bestpars[f])
+    else:
+        fig = triangle.corner(mcpars[:,f], labels=mcnames[f], truths=bestpars[f])
+    
+    
+    fig.savefig(path+basename+'_triangle.png')
+    fig.savefig(path+basename+'_triangle.pdf')
+    plt.close(fig)
 
 def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
     
