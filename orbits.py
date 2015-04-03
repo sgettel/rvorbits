@@ -19,7 +19,7 @@ import utils as ut
 from pwkit import lsqmdl
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0'):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',inc=-1, ince=-1):
 
     tag = ''
     if npoly > 4:
@@ -208,16 +208,13 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         #from transit re-fit
         rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
         rpl, rple = radius_estimate(rprs,rs,ers)
+        print 'rp (re): ',rpl[0],' +',rple[1],' -',rple[0]
         arstar = np.array([44.733919,8.3693767,3.2092898])
 
         #also from transit re-fit
-        imp = np.array([0.38190291,0.26185766,0.28049118])
-        #inc,ince = inclination_estimate()
-        #rpl = 1.854 #Me
-        #rple = 0.041
-        #inc = 89.9771
-        #ince = 0.30
-
+        imp = np.array([0.38190291,0.26185766,0.28049118]) #median, errlo, errhi
+        inc,ince = inclination_estimate(arstar,imp)
+        print 'inc (deg): ',inc,' +',ince[1],' -',ince[0]
 
     if targname == 'K00069':
     
@@ -272,8 +269,9 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         print 'BIC:          ',str(bic0)
 
         #mass estimate
-        mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits)
+        mpsini, a2sini, mp = mass_estimate(m, mstar, norbits=norbits, inc=inc)
         print 'mp*sin(i):         ',str(mpsini)
+        print 'mp:      ',str(mp)
 
         #density estimate
         dpl = density_estimate(mpsini,rpl)
@@ -323,7 +321,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
                 f.close()
             mcbest = par1
             
-            mpsini, a2sini, mparr_mc, a2arr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
+            mpsini, a2sini, mparr_mc, a2arr_mc, mp = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
             dpl = density_estimate(mpsini,rpl, mcmass=mparr_mc, rple=rple)
             
             #plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=norbits)
@@ -692,7 +690,7 @@ def print_mc_errs(mcpars, mpsini, a2sini, mparr_all, a2arr_all,norbits=1,npoly=0
         print 'jitter: ', str(mcbest[-ntel+i]),' +',str(mchi[-ntel+i]-mcbest[-ntel+i]),' -',str(mcbest[-ntel+i]-mclo[-ntel+i])
     return
 
-def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
+def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1, ince=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -713,6 +711,13 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
     #a1sini = np.sqrt(1. - eccs**2)/(2.*np.pi)*amps*(pers*86400.0)/1.496e11
     a2sini = 1.96e-2*mstar**(1./3.)*pers**(2./3.)
 
+    if not inc == -1:
+        mp = mpsini/np.sin(inc*np.pi/180.)
+        a2 = a2sini/np.sin(inc*np.pi/180.)
+    else:
+        mp = -1
+        a2 = -1
+
    # mass estimate for mcmc
     if len(np.array(mcpar).shape) > 0:
         mparr_mc = np.zeros((norbits,mcpar.shape[0]))
@@ -726,9 +731,9 @@ def mass_estimate(m,mstar,norbits=1,bootpar=-1,mcpar=-1):
             a2arr = 1.96e-2*mstar**(1./3.)*(mcpar[:,i*6])**(2./3.)
             mparr_mc[i,:] = mparr
             a2arr_mc[i,:] = a2arr
-        return mpsini, a2sini, mparr_mc, a2arr_mc
+        return mpsini, a2sini, mparr_mc, a2arr_mc, mp
     else:
-        return mpsini, a2sini
+        return mpsini, a2sini, mp
 
 def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     #first planet only...
@@ -771,7 +776,7 @@ def radius_estimate(rr,rs,ers):
     return rp, erp 
 
 def inclination_estimate(arstar,b):
-    cosi = b/arstar
+    cosi = b[0]/arstar[0]
     inc = np.arccos(cosi)*180.0/np.pi #degrees
 
     berr = np.mean(b[1:3]) #assume nearly symmetric
