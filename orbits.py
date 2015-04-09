@@ -16,7 +16,7 @@ import read_rdb_harpsn as rr
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as grd
 import utils as ut
-from pwkit import lsqmdl
+from pwkit import lsqmdl, msmt
 from scipy.stats import norm
 
 def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',inc=-1, ince=-1):
@@ -202,18 +202,23 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         mstar = 1.069
         rs = 1.081 #stellar radius
         ers = 0.019
-
+        rs_dist = np.random.normal(loc=rs,scale=ers,size=4096)
 
         #from transit re-fit
         rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
-        rpl, rple = radius_estimate(rprs,rs,ers)
-        print 'rp (re): ',rpl[0],' +',rple[1],' -',rple[0]
+        #generate distribution of rprs - this isn't quite right...
+        rprs_dist=msmt.sample_double_norm(rprs[0],rprs[2],rprs[1],4096)
+        rpl_dist = radius_estimate(rprs_dist,rs_dist)
+
+        #print 'rp (re): ',rpl[0],' +',rple[1],' -',rple[0]
         arstar = np.array([44.733919,8.3693767,3.2092898])
+        arstar_dist = msmt.sample_double_norm(arstar[0],arstar[2],arstar[1],4096)
 
         #also from transit re-fit
         imp = np.array([0.38190291,0.26185766,0.28049118]) #median, errlo, errhi
-        inc,ince = inclination_estimate(arstar,imp)
-        print 'inc (deg): ',inc,' +',ince[1],' -',ince[0]
+        imp_dist = msmt.sample_double_norm(imp[0],imp[2],imp[1])
+        inc_dist = inclination_estimate(arstar_dist,imp_dist)
+        #print 'inc (deg): ',inc,' +',ince[1],' -',ince[0]
 
     if targname == 'K00069':
     
@@ -227,9 +232,9 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     ip = np.arange(norbits)
     guesspars[1+ip*6] -= epoch
 
-   #trim unused polynomial terms
-    #npars0 = norbits*2 + npoly
-    #guesspars = guesspars[0:npars0] 
+    #trim unused polynomial terms
+    npars0 = norbits*6 + npoly
+    guesspars = guesspars[0:npars0] 
 
     #append offsets if needed
     if ntel > 1:
@@ -252,7 +257,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         print 'BIC:          ',str(bic0)
 
         #mass estimate
-        mpsini, a2sini, mp = mass_estimate(m, mstar, norbits=norbits, inc=inc)
+        mpsini, a2sini, mp = mass_estimate(m, mstar, norbits=norbits, inc=inc_dist)
         print 'mp*sin(i):         ',str(mpsini)
         print 'mp:      ',str(mp)
 
@@ -673,7 +678,7 @@ def print_mc_errs(mcpars, mpsini, a2sini, mparr_all, a2arr_all,norbits=1,npoly=0
         print 'jitter: ', str(mcbest[-ntel+i]),' +',str(mchi[-ntel+i]-mcbest[-ntel+i]),' -',str(mcbest[-ntel+i]-mclo[-ntel+i])
     return
 
-def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1, ince=-1):
+def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -695,8 +700,8 @@ def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1, ince=-1):
     a2sini = 1.96e-2*mstar**(1./3.)*pers**(2./3.)
 
     if not inc == -1:
-        mp = mpsini/np.sin(inc*np.pi/180.)
-        a2 = a2sini/np.sin(inc*np.pi/180.)
+        mp = mpsini/np.sin(np.percentile(inc,50)*np.pi/180.)
+        a2 = a2sini/np.sin(np.percentile(inc,50)*np.pi/180.)
     else:
         mp = -1
         a2 = -1
@@ -714,9 +719,13 @@ def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1, ince=-1):
             a2arr = 1.96e-2*mstar**(1./3.)*(mcpar[:,i*6])**(2./3.)
             mparr_mc[i,:] = mparr
             a2arr_mc[i,:] = a2arr
+
+        #if not inc == -1:
+            
+
         return mpsini, a2sini, mparr_mc, a2arr_mc, mp
     else:
-        return mpsini, a2sini, mp
+        return mpsini, a2sini, mp#, a2
 
 def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     #first planet only...
@@ -746,28 +755,29 @@ def density_estimate(mpsini,rpl,mcmass=-1,rple=-1):
     else:
         return dpl
 
-def radius_estimate(rr,rs,ers):
+def radius_estimate(rr,rs,size=4096):
 
-    #assuming symmetric errors on stellar radius...
+    #draw samples from input distributions
+    rr = np.random.choice(rr,size=size)
+    rs = np.random.choice(rs,size=size)
 
-    rprs = rr[0]*np.ones(1)
-    erprs = np.array([rr[1],rr[2]]) #lo, hi
+    rp_dist = rr*rs * 6.9599e8/6.37814e6 #earth radii
 
-    rp = rprs * rs * 6.9599e8/6.37814e6 #earth radii
-    erp = np.sqrt((ers/rs)**2 + (erprs/rprs)**2)*rp
-
-    return rp, erp 
-
-def inclination_estimate(arstar,b):
-    cosi = b[0]/arstar[0]
-    inc = np.arccos(cosi)*180.0/np.pi #degrees
-
-    berr = np.mean(b[1:3]) #assume nearly symmetric
+#    rp = rprs * rs * 6.9599e8/6.37814e6 #earth radii
+#    erp = np.sqrt((ers/rs)**2 + (erprs/rprs)**2)*rp
     
+    return rp_dist
 
-    ince = np.sqrt(berr**2*(1./(arstar[0]**2 - b[0]**2)) + arstar[1:3]**2*(1./(arstar[0]**4*(1-b[0]/arstar[0]))))
+def inclination_estimate(arstar,b,size=4096):
+    b = np.random.choice(b,size=size)
+    arstar = np.random.choice(arstar,size=size)
+    cosi = b/arstar
+    inc_dist = np.arccos(cosi)*180.0/np.pi #degrees
 
-    return inc, ince
+    #berr = np.mean(b[1:3]) #assume nearly symmetric
+    #ince = np.sqrt(berr**2*(1./(arstar[0]**2 - b[0]**2)) + arstar[1:3]**2*(1./(arstar[0]**4*(1-b[0]/arstar[0]))))
+
+    return inc_dist
 
 
 def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=0,epoch=2.455e6,pfix=1,norbits=1,telvec=-1,psig=-1,tfix='no',tsig=-1):
@@ -785,6 +795,8 @@ def rvfit_lsqmdl(orbel,jdb,rv,srv,jitter=0, param_names=0,npoly=0,circ=0, ttime=
 
     #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
         
+    print orbel
+    print norbits
     ip = np.arange(norbits)
 
     if len(np.array(telvec).shape) > 0:
