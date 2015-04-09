@@ -164,8 +164,6 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     #quart = orbel[3+norbits*6]
 
     #offset = orbel[norbits*6 + npoly + (0-3)] #up to 4 offset terms
-        
-#NO    #ttfloat = orbel[norbits*6 + npoly + ntel-1] #up to norbits terms
 
     #jitter - final term/s, MCMC only
     rpl = 0.0
@@ -192,7 +190,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     
     if targname == 'K00273':
 
-        guesspars = np.array([10.573763, 2455008.0671344, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0])
+        guesspars = np.array([10.573763, 2455008.0671344, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0,0.0])
         ttime = np.array([1,0])
 
         psig = np.array([8.5e-6,0.0])
@@ -204,6 +202,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         mstar = 1.069
         rs = 1.081 #stellar radius
         ers = 0.019
+
 
         #from transit re-fit
         rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
@@ -224,9 +223,13 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         mstar = 0.887
 
     
+    #trim JDB terms
     ip = np.arange(norbits)
-
     guesspars[1+ip*6] -= epoch
+
+   #trim unused polynomial terms
+    #npars0 = norbits*2 + npoly
+    #guesspars = guesspars[0:npars0] 
 
     #append offsets if needed
     if ntel > 1:
@@ -236,26 +239,6 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
     if outer_loop == 'yes':
         print 'defunct!'
-        #brute force search of outer period
-        #        nboot = 0
-        #nwalkers = 0
-        #pguess = np.linspace(450,650,num=201)
-        #outchisq = np.zeros_like(pguess)
-        #outp = np.zeros_like(pguess)
-
-#for i in range(pguess.size):
-#           guesspars[6] = pguess[i]
-#            if (pguess[i] == 487.0) or (pguess[i] == 520.0):
-#                continue
-#            print pguess[i]
-#            pfix = [1,1]
-#            m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,tt=transit,epoch=epoch,pfix=pfix,norbits=norbits)
-#            m.print_soln()
-#            mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits)
-#            print 'mp*sin(i):         ',str(mpsini)
-#            outp[i] = m.params[6]
-#            outchisq[i] = m.rchisq
-#        return m, pguess, outp, outchisq
 
     else:
         m, flt = rvfit_lsqmdl(guesspars, tnorm, rvnorm, nsrv, jitter=jitter,circ=circ, npoly=npoly,ttime=ttime,epoch=epoch,pfix=pfix,norbits=norbits,telvec=telvec,psig=psig,tfix=tfix,tsig=tsig)
