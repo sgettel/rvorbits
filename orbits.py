@@ -163,42 +163,56 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     
     if targname == 'K00273':
 
-        guesspars = np.array([10.573763, 2455008.0671344, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0,0.0])
-        ttime = np.array([1,0])
-
-        psig = np.array([8.5e-6,0.0])
-        tsig = np.array([0.00078,0.0])
-        porig = guesspars[0+ip*6]
-        torig = guesspars[1+ip*6] - epoch
-        
         #from literature
         mstar = 1.069
         rs = 1.081 #stellar radius
         ers = 0.019
-        rs_dist = np.random.normal(loc=rs,scale=ers,size=4096)
+        rs_dist = np.random.normal(loc=rs,scale=ers,size=4096) 
 
-        #try:
+        #get transit params
+        try:
             #read full transit posterior
-        #    sfile = open(home+'Dropbox/cfasgettel/research/kepler/'+targname+'/fit_posteriors_koi273.dat')
-        #    arstar_dist, rprs_dist, imp_dist= np.loadtxt(sfile,unpack=True,usecols=(2,3,4),skiprows=1)
-         #   sfile.close()
-        #except IOError:
+            sfile = open(home+'Dropbox/cfasgettel/research/kepler/'+targname+'/fit_posteriors_koi273.dat')
+            p0_dist,tmod_dist,arstar_dist, rprs_dist, imp_dist= np.loadtxt(sfile,unpack=True,usecols=(0,1,2,3,4),skiprows=1)
+            sfile.close()
+
+            p0 = np.percentile(p0_dist,50)
+            t0 = np.percentile(tmod_dist,50) + 2454833.0 + 16.0*p0
+            p0_err = (np.percentile(p0_dist,84)-np.percentile(p0_dist,16))/2.
+            t0_err = (np.percentile(tmod_dist,84)-np.percentile(tmod_dist,16))/2.
+
+        except IOError:
             #reconstruct from error bars
-        rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
+            rprs = np.array([0.01596,0.00031,0.00085]) #rplanet/rstar, median, errlo, errhi
             #generate distribution of rprs - this isn't quite right...
-        rprs_dist=msmt.sample_double_norm(rprs[0],rprs[2],rprs[1],4096)
-        arstar = np.array([44.733919,8.3693767,3.2092898])
-        arstar_dist = msmt.sample_double_norm(arstar[0],arstar[2],arstar[1],4096)
-        imp = np.array([0.38190291,0.26185766,0.28049118]) #median, errlo, errhi
-        imp_dist = msmt.sample_double_norm(imp[0],imp[2],imp[1],4096)
+            rprs_dist=msmt.sample_double_norm(rprs[0],rprs[2],rprs[1],4096)
+            arstar = np.array([44.733919,8.3693767,3.2092898])
+            arstar_dist = msmt.sample_double_norm(arstar[0],arstar[2],arstar[1],4096)
+            imp = np.array([0.38190291,0.26185766,0.28049118]) #median, errlo, errhi
+            imp_dist = msmt.sample_double_norm(imp[0],imp[2],imp[1],4096)
+
+            p0 = 10.573763
+            t0 = 2455008.0671344
+            p0_err = 8.5e-6
+            t0_err = 0.00078
 
         #calculate transit params
         rpl_dist = radius_estimate(rprs_dist,rs_dist)
         rpl = np.percentile(rpl_dist,50)
         print 'radius: ',str(rpl),' +',str(np.percentile(rpl_dist,84)-rpl),' -',str(rpl-np.percentile(rpl_dist,16))
         inc = inclination_estimate(arstar_dist,imp_dist)
-        
 
+        #attempt to free some memory
+        del p0_dist, tmod_dist, arstar_dist, rprs_dist, imp_dist
+
+        guesspars = np.array([p0, t0, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0,0.0])
+        ttime = np.array([1,0])
+
+        psig = np.array([p0_err,0.0])
+        tsig = np.array([t0_err,0.0])
+        porig = guesspars[0+ip*6]
+        torig = guesspars[1+ip*6] - epoch
+        
     if targname == 'K00069':
     
         guesspars = np.array([4.72673978, 2454944.29227, 0.0, 90.0, 1.733, -91.08, 0.0329])
@@ -1509,31 +1523,37 @@ def make_triangle_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/'):
     fig.savefig(path+basename+'_triangle.pdf')
     plt.close(fig)
 
-#def plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=1):
+def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbits=1):
 #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
 
-#    plt.figure(figsize=(12,10))
-#    nplots = len(flt)
-#    print 'nplots ',nplots
+    mcpars = np.load(path+basename+'_mcpars.dat.npy')
+    mcnames = np.load(path+basename+'_mcnames.dat.npy')
+    flt = np.load(path+basename+'_flt.dat.npy')
+    bestpars = np.load(path+basename+'_bestpars.dat.npy')
 
-#   #auto-generate plot layout
-#    nrow = np.floor(np.sqrt(nplots)).astype(int)
-#    if nplots % nrow == 0:
-#        ncol = nrow
-#    else:
-#        ncol = nrow + 1 
+    f = np.squeeze(flt.nonzero())
 
-#    f = np.squeeze(flt.nonzero()) 
-#    for i in range(f.size):
-#        print mcnames[f[i]]
-#        ax = plt.subplot(nrow,ncol, i+1)
-#        t = ax.yaxis.get_offset_text()
-#        t.set_size(8)
-#        n, bins, patches = plt.hist(mcpars[:,f[i]],50)
-#        plt.xlabel = mcnames[f[i]]
+    plt.figure(figsize=(12,10))
+    nplots = len(f)+norbits*2+1
+    print 'nplots ',nplots
+
+   #auto-generate plot layout
+    nrow = np.floor(np.sqrt(nplots)).astype(int)
+    if nplots % nrow == 0:
+        ncol = nrow
+    else:
+        ncol = nrow + 1 
+
+    for i in range(f.size):
+        print mcnames[f[i]]
+        ax = plt.subplot(nrow,ncol, i+1)
+        t = ax.yaxis.get_offset_text()
+        t.set_size(8)
+        n, bins, patches = plt.hist(mcpars[:,f[i]],50)
+        plt.xlabel = mcnames[f[i]]
         
-#    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_hist.png')
-#    plt.close()
+    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.png')
+    plt.close()
 
 
 def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
