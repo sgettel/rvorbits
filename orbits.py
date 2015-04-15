@@ -19,7 +19,7 @@ import utils as ut
 from pwkit import lsqmdl, msmt
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',inc=-1, ince=-1,thin=1):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',inc=-1, ince=-1,thin=1,threads=1):
 
     tag = ''
     if npoly > 4:
@@ -263,7 +263,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         if nwalkers > 0:
            
 
-            mcbest, bestpars, mcnames, flt, mcpars, chain = setup_emcee_new(targname, m, tnorm, rvnorm, nsrv, tag, circ=circ, npoly=npoly, ttime=ttime, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,tfix=tfix,tsig=tsig,fixjit=fixjit,torig=torig,home=home,hd=hd,machine=machine,thin=thin)
+            mcbest, bestpars, mcnames, flt, mcpars, chain = setup_emcee_new(targname, m, tnorm, rvnorm, nsrv, tag, circ=circ, npoly=npoly, ttime=ttime, jitter=jitter, nwalkers=nwalkers, pfix=pfix, telvec=telvec, norbits=norbits, nsteps=nsteps,psig=psig,porig=porig,nburn=nburn,tfix=tfix,tsig=tsig,fixjit=fixjit,torig=torig,home=home,hd=hd,machine=machine,thin=thin,threads=threads)
             #mcbest = np.percentile(mcpars,50, axis=0) 
 
             #correct offset before plotting
@@ -1260,7 +1260,7 @@ def lnlike_base(bestpars, jdb, rv, srv, norbit, npoly, telvec, tt, ttsig, ttfloa
 
 
 ##########################################################################
-def setup_emcee_new(targname, m, jdb, rv, srv_in, tag, nwalkers=200, circ=0, npoly=0, norbits=1, ttime=0,jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,tfix=0,tsig=-1,fixjit='no',torig=-1,home='',hd=0,machine='vonnegut',thin=1):
+def setup_emcee_new(targname, m, jdb, rv, srv_in, tag, nwalkers=200, circ=0, npoly=0, norbits=1, ttime=0,jitter=0, pfix=1,nburn=300,telvec=-1,nsteps=1000,psig=-1,porig=-1,tfix=0,tsig=-1,fixjit='no',torig=-1,home='',hd=0,machine='vonnegut',thin=1,threads=1):
     
     if len(np.array(telvec).shape) > 0:
         ntel = np.unique(telvec).size
@@ -1415,7 +1415,7 @@ def setup_emcee_new(targname, m, jdb, rv, srv_in, tag, nwalkers=200, circ=0, npo
     print 'MCMC params: ',pnames[f]
     print 'guesses from LM: ',varpars
     
-    chain = run_emcee(targname, mcin, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, termspp, tag, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,psig=psig,porig=porig,ttime=ttime,tsig=tsig,tfix=tfix,circ=circ, torig=torig,home=home,hd=hd,machine=machine,thin=thin)
+    chain = run_emcee(targname, mcin, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, termspp, tag, nwalkers=nwalkers, norbits=norbits, npoly=npoly, telvec=telvec,nsteps=nsteps,psig=psig,porig=porig,ttime=ttime,tsig=tsig,tfix=tfix,circ=circ, torig=torig,home=home,hd=hd,machine=machine,thin=thin,threads=threads)
     print chain.shape
     #It takes a number of iterations to spread walkers throughout param space
     #This is 'burning in'
@@ -1436,28 +1436,15 @@ def setup_emcee_new(targname, m, jdb, rv, srv_in, tag, nwalkers=200, circ=0, npo
 
 
 
-def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, termspp, tag, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=-1,porig=-1,ttime=0,tsig=-1,tfix=0,circ=0,torig=-1,home='',hd=0,machine='vonnegut',thin=1):
+def run_emcee(targname, bestpars, varpars, flt, plo, phi, jdb, rv, srv, pnames, ndim, termspp, tag, nwalkers=200, nsteps=1000, norbits=1, npoly=0, telvec=-1,psig=-1,porig=-1,ttime=0,tsig=-1,tfix=0,circ=0,torig=-1,home='',hd=0,machine='vonnegut',thin=1,threads=1):
     
     #Initialize walkers in tiny Gaussian ball around MLE results
     #number of params comes from varpars
     #pos = [varpars + 1e-3*np.random.randn(ndim) for i in range(nwalkers)] #??
     pos = [varpars + 1e-6*varpars*np.random.randn(ndim) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,porig, ttime, tsig, tfix,circ,termspp,torig))
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, threads=threads,args=(jdb,rv,srv,bestpars,flt, pnames, plo, phi, norbits, npoly, telvec,psig,porig, ttime, tsig, tfix,circ,termspp,torig))
 
-#    f = open('chain.dat','w')
-#    f.close()
 
-#    if home == '/home/sgettel/' and hd == 0:
-#        for result in sampler.sample(pos, iterations=nsteps, storechain=False):
-#            position = result[0]
-#            f = open('chain.dat','a')
-#            for k in range(position.shape[0]):
-#                f.write("{0:4d}".format(k, " ".join(position[k]))+'\n')
-            #np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_chain.dat',position)
-#            f.close()
-       
-
-    
     #Run MCMC
     sampler.run_mcmc(pos, nsteps,thin=thin)
     print("Mean acceptance fraction: {0:.3f}"
@@ -1499,30 +1486,6 @@ def gelman_rubin(chain):
     print 'Reduction factor: ', R
     return R
 
-
-    
-
-def post_processing(targname, m, chain, mcpars, mcnames, flt, bestpars, nsteps, nburn,home='/home/sgettel',tag='',nwalkers=200):
-
-    #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin] - post-burn-in only!
-
-    f = np.squeeze(flt.nonzero())
-    
-    print 'f defined'
-    ndim = f.size
-    #samples = chain[:, nburn:, :].reshape((-1, ndim)) #this is redundant, use mcpars...
-    #print 'samples defined'
-    #fig = triangle.corner(samples, labels=mcnames[f], truths=bestpars[f])
-    fig = triangle.corner(mcpars[:,f], labels=mcnames[f], truths=bestpars[f])
-    print 'triangle made'
-
-    fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.pdf')
-    fig.savefig(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_triangle.png')
-    plt.close(fig)
-
-
-    return
-
 def make_triangle_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/'):
 
     #restore variables
@@ -1545,6 +1508,33 @@ def make_triangle_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/'):
     fig.savefig(path+basename+'_triangle.png')
     fig.savefig(path+basename+'_triangle.pdf')
     plt.close(fig)
+
+#def plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=1):
+#mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
+
+#    plt.figure(figsize=(12,10))
+#    nplots = len(flt)
+#    print 'nplots ',nplots
+
+#   #auto-generate plot layout
+#    nrow = np.floor(np.sqrt(nplots)).astype(int)
+#    if nplots % nrow == 0:
+#        ncol = nrow
+#    else:
+#        ncol = nrow + 1 
+
+#    f = np.squeeze(flt.nonzero()) 
+#    for i in range(f.size):
+#        print mcnames[f[i]]
+#        ax = plt.subplot(nrow,ncol, i+1)
+#        t = ax.yaxis.get_offset_text()
+#        t.set_size(8)
+#        n, bins, patches = plt.hist(mcpars[:,f[i]],50)
+#        plt.xlabel = mcnames[f[i]]
+        
+#    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_hist.png')
+#    plt.close()
+
 
 def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
     
