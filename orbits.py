@@ -92,6 +92,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
                 
             jdb = np.append(jdb,kjdb)
             rvnorm = rv - np.median(rv)
+            print 'median rv: ',rvnorm
             rvnorm = np.append(rvnorm,krvnorm)
             srv = np.append(srv,ksrv)
             telvec = np.append(telvec,ktel)
@@ -99,6 +100,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             print np.mean(ksrv), ' typical Keck error '
         else:
             rvnorm = rv - np.median(rv)
+            print 'median rv: ',rvnorm
 
     #adjust values to be sensible
     #if jdb[0] > epoch:
@@ -167,12 +169,12 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         mstar = 1.069
         rs = 1.081 #stellar radius
         ers = 0.019
-        rs_dist = np.random.normal(loc=rs,scale=ers,size=4096) 
+        rs_dist = np.random.normal(loc=rs,scale=ers,size=10000) 
 
         #get transit params
         try:
             #read full transit posterior
-            sfile = open(home+'Dropbox/cfasgettel/research/kepler/'+targname+'/fit_posteriors_koi273.dat')
+            sfile = open(home+'Dropbox/cfasgettel/research/kepler/'+targname+'/fit_posteriors_koi273_shortcad.dat')
             p0_dist,tmod_dist,arstar_dist, rprs_dist, imp_dist= np.loadtxt(sfile,unpack=True,usecols=(0,1,2,3,4),skiprows=1)
             sfile.close()
 
@@ -180,6 +182,12 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             t0 = np.percentile(tmod_dist,50) + 2454833.0 + 16.0*p0
             p0_err = (np.percentile(p0_dist,84)-np.percentile(p0_dist,16))/2.
             t0_err = (np.percentile(tmod_dist,84)-np.percentile(tmod_dist,16))/2.
+            print ' '
+            print 'period: ',p0,' +',str(np.percentile(p0_dist,84)-p0),' -',str(p0-np.percentile(p0_dist,16))
+            print 't0: ',t0,' +',str(np.percentile(tmod_dist,84)-np.percentile(tmod_dist,50)),' -',str(np.percentile(tmod_dist,50)-np.percentile(tmod_dist,16))
+            print 'a/rstar: ',np.percentile(arstar_dist,50),' +',str(np.percentile(arstar_dist,84)-np.percentile(arstar_dist,50)),' -',str(np.percentile(arstar_dist,50)-np.percentile(arstar_dist,16))
+            print 'rp/rstar: ',np.percentile(rprs_dist,50),' +',str(np.percentile(rprs_dist,84)-np.percentile(rprs_dist,50)),' -',str(np.percentile(rprs_dist,50)-np.percentile(rprs_dist,16))
+            print 'impact: ',np.percentile(imp_dist,50),' +',str(np.percentile(imp_dist,84)-np.percentile(imp_dist,50)),' -',str(np.percentile(imp_dist,50)-np.percentile(imp_dist,16))
 
         except IOError:
             #reconstruct from error bars
@@ -201,7 +209,8 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         rpl = np.percentile(rpl_dist,50)
         print 'radius: ',str(rpl),' +',str(np.percentile(rpl_dist,84)-rpl),' -',str(rpl-np.percentile(rpl_dist,16))
         inc = inclination_estimate(arstar_dist,imp_dist)
-
+        print 'inclination: ',np.percentile(inc,50),' +',str(np.percentile(inc,84)-np.percentile(inc,50)),' -',str(np.percentile(inc,50)-np.percentile(inc,16))
+        print ' '
         #attempt to free some memory
         del p0_dist, tmod_dist, arstar_dist, rprs_dist, imp_dist
 
@@ -790,7 +799,7 @@ def density_estimate(mpsini,rpl,mcmass=-1,rpl_dist=-1):
     else:
         return dpl
 
-def radius_estimate(rr,rs,size=4096):
+def radius_estimate(rr,rs,size=10000):
 
     #draw samples from input distributions
     rr = np.random.choice(rr,size=size)
@@ -803,7 +812,7 @@ def radius_estimate(rr,rs,size=4096):
     
     return rp_dist
 
-def inclination_estimate(arstar,b,size=4096):
+def inclination_estimate(arstar,b,size=10000):
 
     #draw samples from input distributions
     b = np.random.choice(b,size=size)
@@ -1533,8 +1542,9 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
 
     f = np.squeeze(flt.nonzero())
 
-    plt.figure(figsize=(12,10))
-    nplots = len(f)+norbits*2+1
+    plt.figure(figsize=(18,15))
+    
+    nplots = len(f)+norbits+1
     print 'nplots ',nplots
 
    #auto-generate plot layout
@@ -1543,18 +1553,32 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
         ncol = nrow
     else:
         ncol = nrow + 1 
-
+    
     for i in range(f.size):
-        print mcnames[f[i]]
+        #print mcnames[f[i]]
         ax = plt.subplot(nrow,ncol, i+1)
+              
         t = ax.yaxis.get_offset_text()
-        t.set_size(8)
-        n, bins, patches = plt.hist(mcpars[:,f[i]],50)
-        plt.xlabel = mcnames[f[i]]
+        #t.set_size(40) #NOPE
+        n, bins, patches = plt.hist(mcpars[:,f[i]],100)
+        plt.tight_layout()
+        ax.set_title(mcnames[f[i]])# = mcnames[f[i]]
+        junk = ax.get_xticklabels() #why is this formatted like this?
         
+        label = [junk[q].get_position()[0] for q in range(len(junk)) ]
+        
+        ax.set_xticklabels(label,rotation=-45)
+    
+#    for i in norbits:
+#        ax = plt.subplot(nrow,ncol, f.size+i+1)
+#        n, bins, patches = plt.hist(mcpars[:,f[i]],100)
+    
     plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.png')
+    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.pdf')
+    
     plt.close()
-
+    
+    return junk
 
 def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
     
