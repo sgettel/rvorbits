@@ -92,7 +92,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
                 
             jdb = np.append(jdb,kjdb)
             rvnorm = rv - np.median(rv)
-            print 'median rv: ',rvnorm
+            print 'median rv: ',np.median(rv)
             rvnorm = np.append(rvnorm,krvnorm)
             srv = np.append(srv,ksrv)
             telvec = np.append(telvec,ktel)
@@ -100,7 +100,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             print np.mean(ksrv), ' typical Keck error '
         else:
             rvnorm = rv - np.median(rv)
-            print 'median rv: ',rvnorm
+            print 'median rv: ',np.median(rv)
 
     #adjust values to be sensible
     #if jdb[0] > epoch:
@@ -279,7 +279,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             m.params[i+norbits*6+npoly] = 0
         
         #make plots & restore offset
-        res0 = plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,keck=keck,ttime=ttime,tag=tag)
+        res1, res0 = plot_rv(targname,tnorm,rvp,nsrv,guesspars,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,keck=keck,ttime=ttime,tag=tag)
         m.params = par0
        
         #call MCMC    
@@ -299,7 +299,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
                 rvp[a] -= mcbest[i+norbits*6+npoly]
                 mcbest[i+norbits*6+npoly] = 0
             
-            pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck,ttime=ttime,tag=tag)
+            res1, pres = plot_rv(targname,tnorm,rvp,nsrv,mcbest,m,nmod=200,home=home,norbits=norbits,npoly=npoly,telvec=telvec,mc=1,keck=keck,ttime=ttime,tag=tag)
             
             if storeflat == 'yes':
                 f = open(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_rvflat.dat','w')
@@ -309,6 +309,11 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
                     f.write(str(tnorm[i])+' '+str(pres[i])+' '+str(nsrv[i])+' '+str(telvec[i])+'\n')
                 f.close()
+                f = open(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_res.dat','w')
+                for i in range(tnorm.size):
+                    f.write(str(tnorm[i])+' '+str(res1[i])+' '+str(nsrv[i])+' '+str(telvec[i])+'\n') 
+                f.close()
+                
             mcbest = par1
             
             mpsini, a2sini, mparr_mc, a2arr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
@@ -496,7 +501,7 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
         plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_phase_autoplot.png')
     plt.close(2)
     
-    return pres
+    return res1, pres
 
 #def plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=1):
 #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
