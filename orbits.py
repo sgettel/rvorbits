@@ -19,7 +19,7 @@ import utils as ut
 from pwkit import lsqmdl, msmt
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',inc=-1, ince=-1,thin=1,threads=1):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',thin=1,threads=1):
 
     tag = ''
     if npoly > 4:
@@ -346,12 +346,14 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         #np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
         if home == '/home/sgettel/' and hd == 0:
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_density.dat',dpl)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mcnames.dat',mcnames)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_flt.dat',flt)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_bestpars.dat',bestpars)
         else:
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_density.dat',dpl)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mcnames.dat',mcnames)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_flt.dat',flt)
@@ -502,32 +504,6 @@ def plot_rv(targname,jdb,rv,srv,gpars,m,nmod=1000,home='/home/sgettel/', norbits
     plt.close(2)
     
     return res1, pres
-
-#def plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=1):
-#mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
-
-#    plt.figure(figsize=(12,10))
-#    nplots = len(flt)
-#    print 'nplots ',nplots
-
-#   #auto-generate plot layout
-#    nrow = np.floor(np.sqrt(nplots)).astype(int)
-#    if nplots % nrow == 0:
-#        ncol = nrow
-#    else:
-#        ncol = nrow + 1 
-
-#    f = np.squeeze(flt.nonzero()) 
-#    for i in range(f.size):
-#        print mcnames[f[i]]
-#        ax = plt.subplot(nrow,ncol, i+1)
-#        t = ax.yaxis.get_offset_text()
-#        t.set_size(8)
-#        n, bins, patches = plt.hist(mcpars[:,f[i]],50)
-#        plt.xlabel = mcnames[f[i]]
-        
-#    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_hist.png')
-#    plt.close()
 
 def write_full_soln(m,targname,mpsini, a2sini, bic, mcpars=-1, mparr_mc=-1,norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,tag='',mcdpl=-1,inc=-1):
     
@@ -1544,6 +1520,7 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
     mcnames = np.load(path+basename+'_mcnames.dat.npy')
     flt = np.load(path+basename+'_flt.dat.npy')
     bestpars = np.load(path+basename+'_bestpars.dat.npy')
+    mass = np.load(path+basename+'_mass.dat.npy')
 
     f = np.squeeze(flt.nonzero())
 
@@ -1566,8 +1543,11 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
         t = ax.yaxis.get_offset_text()
         #t.set_size(40) #NOPE
         n, bins, patches = plt.hist(mcpars[:,f[i]],100)
+        plt.axvline(np.median(mcpars[:,f[i]]),linewidth=2)
+        plt.axvline(np.percentile(mcpars[:,f[i]],84),linewidth=2)
+        plt.axvline(np.percentile(mcpars[:,f[i]],16),linewidth=2)
+        ax.set_xlabel(mcnames[f[i]])
         plt.tight_layout()
-        ax.set_title(mcnames[f[i]])# = mcnames[f[i]]
         junk = ax.get_xticklabels() #why is this formatted like this?
         
         label = [junk[q].get_position()[0] for q in range(len(junk)) ]
