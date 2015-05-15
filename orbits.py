@@ -259,7 +259,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         print 'BIC:          ',str(bic0)
 
         #mass estimate*sin(i)
-        mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits, inc=inc)
+        mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits)
         print 'mp*sin(i):         ',str(mpsini)
         #print 'mp:      ',str(mp)
 
@@ -703,7 +703,7 @@ def print_mc_errs(mcpars, mpsini, a2sini, mparr_all, a2arr_all,norbits=1,npoly=0
         print 'jitter: ', str(mcbest[-ntel+i]),' +',str(mchi[-ntel+i]-mcbest[-ntel+i]),' -',str(mcbest[-ntel+i]-mclo[-ntel+i])
     return
 
-def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1, inc=-1):
+def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
@@ -1565,9 +1565,12 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
     
     return junk
 
-def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
+def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
     
-    jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk = rr.process_all(targname,maxrv=-50000,maxsrv=5)
+    path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
+    #path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_ecc_ecc_1_80002'
+
+    jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk, exptime = rr.process_all(targname,maxrv=-50000,maxsrv=5)
     jdb += 2.4e6 #because process_all gives truncated JDBs
     telvec = np.zeros_like(jdb)
     print jdb.size,' HARPS-N obs'
@@ -1594,9 +1597,8 @@ def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch
         rvnorm = rv - np.median(rv)
     jdb = jdb - epoch #truncate
     medrv = np.median(rv)
-    
-    #path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_circ_ecc_1_50002'
-    path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_ecc_ecc_1_80002'
+    print 'median rv: ', medrv
+    print 'median rvnorm: ', np.median(rvnorm)
     
     mcpars = np.load(path+'_mcpars.dat.npy')
     mcnames = np.load(path+'_mcnames.dat.npy')
@@ -1619,30 +1621,34 @@ def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch
         parst[4] = 0.0
         poly = rv_drive_new(parst,tmod,norbits,npoly,telvec,ttime)
 
+    h = np.squeeze(np.where(telvec == 0))
     k = np.squeeze(np.where(telvec == 1))
     
     #unphased data, now with residuals!
     plt.figure(1)
     gs = grd.GridSpec(2,1, height_ratios=[3,1])
     ax1 = plt.subplot(gs[0])
-    plt.errorbar(jdb,rvnorm,yerr=srv,fmt='bo')
+    plt.errorbar(jdb[h],rvnorm[h],yerr=srv[h],fmt='bo')
     if keck == 'yes':
-        plt.errorbar(jdb[k],rvnorm[k],yerr=srv[k],fmt='go')
-    plt.plot(tmod,model_final,'r-')
+        plt.errorbar(jdb[k],rvnorm[k],yerr=srv[k],fmt='rs')
+    plt.plot(tmod,model_final,'g-')
+    if 'dvdt' in mcnames:
+        trend = np.squeeze(np.where(mcnames == 'dvdt'))
+        plt.plot(tmod,tmod*mcbest[trend],'k-')
     #plt.xlabel('Adjusted BJD')
     plt.ylabel('Normalized RV (m/s)')
 
     ax2 = plt.subplot(gs[1])
-    plt.errorbar(jdb,res1,yerr=srv,fmt='bo')
+    plt.errorbar(jdb[h],res1[h],yerr=srv[h],fmt='bo')
     if keck == 'yes':
-        plt.errorbar(jdb[k],res1[k],yerr=srv[k],fmt='go')
+        plt.errorbar(jdb[k],res1[k],yerr=srv[k],fmt='rs')
     plt.plot(tmod,np.zeros_like(tmod),'k-')
     plt.xlabel('Adjusted BJD')
     plt.ylabel('Residuals (m/s)')
     
     
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_afterplot.pdf')
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_afterplot.png')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_afterplot.pdf')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_afterplot.png')
 
     plt.close(1)
     
@@ -1655,25 +1661,29 @@ def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch
     parst[5] = 0.0
     phase = (jdb - pars[1])/pars[0] % 1.0
     
-    rvt = rv_drive_new(parst,jdb,norbits,npoly,telvec,ttime)
-    pres = (rvnorm-rvt) - pars[5]
     telvec = np.zeros_like(tmod)
+    rvt = rv_drive_new(parst,jdb,norbits,npoly,telvec,ttime)
+    junk = rv_drive_new(pars, tmod,1,0,telvec,ttime)
+    medmodel = np.median(junk) 
+    print medmodel
+    pres = (rvnorm-rvt) - pars[5]
+    
     
     plt.figure(2)
     gs = grd.GridSpec(2,1, height_ratios=[3,1])
     ax1 = plt.subplot(gs[0])
-    plt.errorbar(phase, rvnorm-rvt, yerr=srv,fmt='bo')
-    plt.errorbar(phase+1, rvnorm-rvt, yerr=srv,fmt='bo',mfc='none')
-    plt.errorbar(phase-1, rvnorm-rvt, yerr=srv,fmt='bo',mfc='none')
+    plt.errorbar(phase[h], rvnorm[h]-rvt[h]-medmodel, yerr=srv[h],fmt='bo')
+    plt.errorbar(phase[h]+1, rvnorm[h]-rvt[h]-medmodel, yerr=srv[h],fmt='bo',mfc='none',mec='b')
+    plt.errorbar(phase[h]-1, rvnorm[h]-rvt[h]-medmodel, yerr=srv[h],fmt='bo',mfc='none',mec='b')
 
     if keck == 'yes':
-        plt.errorbar(phase[k],rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',)
-        plt.errorbar(phase[k]+1,rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',mfc='none')
-        plt.errorbar(phase[k]-1,rvnorm[k]-rvt[k],yerr=srv[k],fmt='go',mfc='none')
+        plt.errorbar(phase[k],rvnorm[k]-rvt[k]-medmodel,yerr=srv[k],fmt='rs',)
+        plt.errorbar(phase[k]+1,rvnorm[k]-rvt[k]-medmodel,yerr=srv[k],fmt='rs',mfc='none',mec='r')
+        plt.errorbar(phase[k]-1,rvnorm[k]-rvt[k]-medmodel,yerr=srv[k],fmt='rs',mfc='none',mec='r')
 
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0 +1, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0 -1, rv_drive_new(pars, tmod,1,0,telvec,ttime),'r.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 +1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 -1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
 
     #plt.xlabel('Orbital Phase')
     plt.ylabel('Normalized RV (m/s)')
@@ -1682,13 +1692,13 @@ def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch
 
     ax2 = plt.subplot(gs[1])
     res2 = rvnorm - rvt - rv_drive_new(pars,jdb,1,0,telvec,ttime)
-    plt.errorbar(phase,res2,yerr=srv,fmt='bo')
-    plt.errorbar(phase+1,res2,yerr=srv,fmt='bo',mfc='none')
-    plt.errorbar(phase-1,res2,yerr=srv,fmt='bo',mfc='none')
+    plt.errorbar(phase[h],res2[h],yerr=srv[h],fmt='bo')
+    plt.errorbar(phase[h]+1,res2[h],yerr=srv[h],fmt='bo',mfc='none',mec='b')
+    plt.errorbar(phase[h]-1,res2[h],yerr=srv[h],fmt='bo',mfc='none',mec='b')
     if keck == 'yes':
-        plt.errorbar(phase[k],res2[k],yerr=srv[k],fmt='go')
-        plt.errorbar(phase[k]+1,res2[k],yerr=srv[k],fmt='go',mfc='none')
-        plt.errorbar(phase[k]-1,res2[k],yerr=srv[k],fmt='go',mfc='none')
+        plt.errorbar(phase[k],res2[k],yerr=srv[k],fmt='rs')
+        plt.errorbar(phase[k]+1,res2[k],yerr=srv[k],fmt='rs',mfc='none',mec='r')
+        plt.errorbar(phase[k]-1,res2[k],yerr=srv[k],fmt='rs',mfc='none',mec='r')
     plt.plot(np.linspace(-0.25,1.25,num=tmod.size),np.zeros_like(tmod),'k-')
     #plt.plot((tmod- pars[1])/pars[0] % 1.0 + 1,np.zeros_like(tmod),'k-')
     #plt.plot((tmod- pars[1])/pars[0] % 1.0 - 1,np.zeros_like(tmod),'k-')
@@ -1697,11 +1707,117 @@ def plot_rv_after(targname='K00273',nmod=1000, norbits=1,npoly=0,keck='no',epoch
     plt.xlim([-0.25,1.25])
     
     
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_afterplot.pdf')
-    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+'_phase_afterplot.png')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_phase_afterplot.pdf')
+    plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_phase_afterplot.png')
     plt.close(2)
+
+def write_soln_after(mpsini, a2sini, bic, targname='K00273',tag='K00273_circ_ecc_1_50000',norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,mcdpl=-1,inc=-1):
+
+    path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
     
-#return pres
+    mcpars = np.load(path+'_mcpars.dat.npy')
+    mcnames = np.load(path+'_mcnames.dat.npy')
+    mparr_mc = np.load(path+'_mass.dat.npy')
+    mcdpl = np.load(path+'_density.dat.npy')
+    mcbest = np.percentile(mcpars,50, axis=0)
+    diff = np.abs(mcpars-mcbest,axis=0)
+    diff = np.sort(diff,axis=0)
+    mcerr = np.percentile(diff,68,axis=0)
+
+    poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
+
+    if len(np.array(telvec).shape) > 0:
+        tels = np.unique(telvec)
+        ntel = np.unique(telvec).size
+    
+    f = open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_orbit_after.dat','w')
+    
+    
+    #print MCMC errs
+    for i in range(norbits):
+        eccs, oms = toeccom(mcpars[:,2+i*6],mcpars[:,3+i*6])
+        deccs = np.abs(np.percentile(eccs,50)-eccs,axis=0)
+        deccs = np.sort(deccs,axis=0)
+        doms = np.abs(np.percentile(doms,50)-doms,axis=0)
+        doms = np.sort(doms,axis=0)
+        
+        f.write('                                               \n')
+        f.write('*****Planet '+str(i+1)+' MCMC Errors:***** \n')    
+        f.write('Per: '+str(mcbest[0+i*6])+' +/-'+str(mcerr[0+i*6]) +'\n')
+        if ttime[i] == 1:
+            f.write('Tt: '+ str(mcbest[1+i*6])+' +/-'+str(mcerr[1+i*6]) +'\n')
+        else:
+            f.write('Tp: '+ str(mcbest[1+i*6])+' +/-'+str(mcerr[1+i*6]) +'\n')
+            f.write('sqesinom: '+ str(mcbest[2+i*6])+' +/-'+str(mcherr[2+i*6])+'\n')
+            f.write('sqecosom: '+str(mcbest[3+i*6])+' +/-'+str(mcerr[3+i*6])+'\n')
+            f.write('ecc: '+str(np.percentile(eccs,50))+' +/-'+str(np.percentile(deccs,68))+'\n')
+            f.write('ecc1: '+ str(np.percentile(eccs,0))+'-'+str(np.percentile(eccs,68))+'\n')
+            f.write('om: '+str(np.percentile(oms,50))+' +/-'+str(np.percentile(doms,68))+'\n')
+            f.write('K1: '+str(mcbest[4+i*6])+' +/-'+str(mcerr[4+i*6])+'\n')
+            f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerri[5+i*6])+'\n')
+            
+            mpbest = np.percentile(mparr_mc[i,:], 50)
+            dmp = np.abs(mpbest - mparr_mc[i,:])
+            dmp = np.sort(dmp,axis=0)
+            #mphi = np.percentile(mparr_mc[i,:], 84)
+            #mplo = np.percentile(mparr_mc[i,:], 16)
+            a2best = np.percentile(a2arr_all[i,:], 50)
+            da2 = np.abs(a2best - a2arr_all[i,:])
+            da2 = np.sort(da2,axis=0)
+            #a2hi = np.percentile(a2arr_all[i,:], 84)
+            #a2lo = np.percentile(a2arr_all[i,:], 16)
+
+            f.write('nsamples: '+str(mparr_mc.shape[1])+'\n')
+            f.write('convergence: '+str(psrf)+'\n')
+
+            f.write('mp*sin(i): '+str(mpbest)+' +/-'+str(np.percentile(dmp,68))+'\n')
+            f.write('mass error:'+ str(np.percentile(dmp,68)/mpbest*100)+ '%'+'\n') 
+            f.write('a2*sin(i): '+str(a2best)+' +/-'+str(np.percentile(da2,68))+'\n')
+
+            if i == 0:
+                dpbest = np.percentile(mcdpl, 50)
+                ddp = np.abs(dpbest - mcdpl)
+                ddp = np.sort(ddp)
+                #dplo = np.percentile(mcdpl, 16)
+                #dphi = np.percentile(mcdpl, 84)
+                
+                f.write('density*sin(i): '+str(dpbest)+' +/-'+str(np.percentile(ddp,68))+'\n')
+
+           # if len(np.array(inc).shape) > 0:
+           #     #draw from inclination distribution
+           #     inc_dist = np.random.choice(inc,size=mparr_mc.shape[1])*np.pi/180.
+
+           #     mpbest_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 50)
+           #     mphi_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 84)
+           #     mplo_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 16)
+           #     a2best_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 50)
+           #     a2hi_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 84)
+           #     a2lo_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 16)
+
+           #     f.write('mp: '+str(mpbest_cor)+' +'+str(mphi_cor-mpbest_cor)+' -'+str(mpbest_cor-mplo_cor)+'\n')
+           #     f.write('mass error:'+ str((mphi_cor-mpbest_cor)/mpbest_cor*100)+','+str((mpbest_cor-mplo_cor)/mpbest_cor*100)+ '%'+'\n') 
+           #     f.write('a2: '+str(a2best_cor)+' +'+str(a2hi_cor-a2best_cor)+' -'+str(a2best_cor-a2lo_cor)+'\n')
+
+           #     if i == 0:
+           #         dpbest_cor = np.percentile(mcdpl/np.sin(inc_dist), 50)
+           #         dplo_cor = np.percentile(mcdpl/np.sin(inc_dist), 16)
+           #         dphi_cor = np.percentile(mcdpl/np.sin(inc_dist), 84)
+                
+           #         f.write('density: '+str(dpbest_cor)+' +'+str(dphi_cor-dpbest_cor)+' -'+str(dpbest_cor-dplo_cor)+'\n')
+
+        for i in range(npoly):
+            #f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerr[5+i*6])+'\n')
+            f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
+        for i in range(ntel-1):
+            a = np.squeeze(np.where(telvec == tels[i+1]))
+            f.write('offset: '+str(mcbest[i+norbits*6+npoly])+' +'+str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly])+' -'+str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])+'\n')
+
+        for i in range(ntel):
+            f.write('jitter: '+ str(mcbest[-ntel+i])+' +'+str(mchi[-ntel+i]-mcbest[-ntel+i])+' -'+str(mcbest[-ntel+i]-mclo[-ntel+i])+'\n')
+
+        f.write('MC BIC: '+str(mbic)+'\n')
+    f.close()
+
 
 #to run as ...orbits.py
 if __name__ == '__main__':
