@@ -1,7 +1,7 @@
 #RV orbit modeling code based on RVLIN by Jason Wright (IDL) and orbits.f by Alex Wolszczan (FORTRAN77)
 
 #
-# Branch ecoso
+# Branch master
 # PUT ALL TRANSITING PLANETS FIRST!
 # Using time as generic, Tt or Tp as available
 #
@@ -343,8 +343,9 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         write_full_soln(m, targname, mpsini, a2sini, bic0, mcpars=mcpars, mparr_mc=mparr_mc, norbits=norbits, npoly=npoly, telvec=telvec, tfix=tfix, tsig=tsig,mbic=bic,psrf=psrf, a2arr_all=a2arr_mc,home=home,ttime=ttime,tag=tag,mcdpl=dpl,inc=inc)
 
         #store data as binary
-        #np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
+        
         if home == '/home/sgettel/' and hd == 0:
+            np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_density.dat',dpl)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
@@ -703,20 +704,28 @@ def print_mc_errs(mcpars, mpsini, a2sini, mparr_all, a2arr_all,norbits=1,npoly=0
         print 'jitter: ', str(mcbest[-ntel+i]),' +',str(mchi[-ntel+i]-mcbest[-ntel+i]),' -',str(mcbest[-ntel+i]-mclo[-ntel+i])
     return
 
-def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1):
+def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1,ems=0):
    
     #some constants, maybe use astropy here
     msun = 1.9891e30
     mearth = 5.97219e24
     G = 6.673e-11 #m^3 kg^-1 s^-2
     etoj = 317.83
-    
+
+    #approx distribution of stellar masses
+    ems = ut.arrayify(ems)
+    if ems[0] > 0:
+        ms_dist = np.random.normal(loc=mstar,scale=ems,size=10000) 
+    else:
+        ms_dist = np.ones(10000)*mstar
+
     ip = np.array(range(norbits))
     
     pers = m.params[ip*6]
     eccs = m.params[ip*6+2]
     amps = m.params[ip*6+4]
     
+  
     
     #mass estimate
     fm = (1 - eccs*eccs)**(1.5)*amps**3*(pers*86400.0)/(2*np.pi*G) #kg
@@ -733,13 +742,15 @@ def mass_estimate(m, mstar, norbits=1, bootpar=-1, mcpar=-1):
     if len(np.array(mcpar).shape) > 0:
         mparr_mc = np.zeros((norbits,mcpar.shape[0]))
         a2arr_mc = np.zeros((norbits,mcpar.shape[0]))
+        ms_dist = np.random.normal(loc=mstar,scale=ems,size=mcpar.shape[0])
+
 
         for i in ip:
             eccs, oms = toeccom(mcpar[:,2+i*6],mcpar[:,3+i*6])
             #fmarr = (1 - mcpar[:,2+i*6]**2)**(1.5)*mcpar[:,i*6+4]**3*(mcpar[:,i*6]*86400.0)/(2.0*np.pi*G)
             fmarr = (1 - eccs**2)**(1.5)*mcpar[:,i*6+4]**3*(mcpar[:,i*6]*86400.0)/(2.0*np.pi*G)
-            mparr = ((mstar*msun)**2*fmarr)**(1./3.)/mearth
-            a2arr = 1.96e-2*mstar**(1./3.)*(mcpar[:,i*6])**(2./3.)
+            mparr = ((ms_dist*msun)**2*fmarr)**(1./3.)/mearth
+            a2arr = 1.96e-2*ms_dist**(1./3.)*(mcpar[:,i*6])**(2./3.)
             mparr_mc[i,:] = mparr
             a2arr_mc[i,:] = a2arr      
 
@@ -761,9 +772,9 @@ def density_estimate(mpsini,rpl,mcmass=-1,rpl_dist=-1):
     if len(np.array(mcmass).shape) > 0:
 
         #sample radius distribution to match size of mass distribution
-        rpl = np.random.choice(rpl_dist,size=mcmass.shape[1])
+        rpl = np.random.choice(rpl_dist,size=mcmass.size)
         vol = 4./3.*np.pi*(rpl/re2cm)**3 #cm**3
-        mcdpl = mcmass[0]*5.973e27/vol
+        mcdpl = mcmass*5.973e27/vol
         
         #mpbest = np.percentile(mcmass[0,:], 50)
         #mphi = np.percentile(mcmass[0,:], 84)
@@ -1565,8 +1576,9 @@ def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbi
     
     return junk
 
-def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, norbits=1,npoly=0,keck='no',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0])):
-    
+def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_300000',nmod=1000, norbits=2,npoly=1,keck='yes',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0]),jitter=[1.5,3.5]):
+
+    jitter = ut.arrayify(jitter)
     path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
     #path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_ecc_ecc_1_80002'
 
@@ -1603,6 +1615,7 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
     mcpars = np.load(path+'_mcpars.dat.npy')
     mcnames = np.load(path+'_mcnames.dat.npy')
     mcbest = np.percentile(mcpars,50, axis=0)
+
     
     #mcbest = np.copy(gpars) #this is mcbest...
     for i in range(norbits):
@@ -1623,7 +1636,9 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
 
     h = np.squeeze(np.where(telvec == 0))
     k = np.squeeze(np.where(telvec == 1))
-    
+    srv[h] = np.sqrt(srv[h]**2 + jitter[0]**2)
+    srv[k] = np.sqrt(srv[k]**2 + jitter[1]**2)
+
     #unphased data, now with residuals!
     plt.figure(1)
     gs = grd.GridSpec(2,1, height_ratios=[3,1])
@@ -1631,10 +1646,10 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
     plt.errorbar(jdb[h],rvnorm[h],yerr=srv[h],fmt='bo')
     if keck == 'yes':
         plt.errorbar(jdb[k],rvnorm[k],yerr=srv[k],fmt='rs')
-    plt.plot(tmod,model_final,'g-')
+    plt.plot(tmod,model_final,'k-')
     if 'dvdt' in mcnames:
         trend = np.squeeze(np.where(mcnames == 'dvdt'))
-        plt.plot(tmod,tmod*mcbest[trend],'k-')
+        plt.plot(tmod,tmod*mcbest[trend],'g-')
     #plt.xlabel('Adjusted BJD')
     plt.ylabel('Normalized RV (m/s)')
 
@@ -1670,7 +1685,7 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
     
     
     plt.figure(2)
-    gs = grd.GridSpec(2,1, height_ratios=[3,1])
+    gs = grd.GridSpec(2,1, height_ratios=[1,1])
     ax1 = plt.subplot(gs[0])
     plt.errorbar(phase[h], rvnorm[h]-rvt[h]-medmodel, yerr=srv[h],fmt='bo')
     plt.errorbar(phase[h]+1, rvnorm[h]-rvt[h]-medmodel, yerr=srv[h],fmt='bo',mfc='none',mec='b')
@@ -1681,14 +1696,29 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
         plt.errorbar(phase[k]+1,rvnorm[k]-rvt[k]-medmodel,yerr=srv[k],fmt='rs',mfc='none',mec='r')
         plt.errorbar(phase[k]-1,rvnorm[k]-rvt[k]-medmodel,yerr=srv[k],fmt='rs',mfc='none',mec='r')
 
-    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0 +1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
-    plt.plot((tmod - pars[1])/pars[0] % 1.0 -1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'g.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'k.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 +1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'k.')
+    plt.plot((tmod - pars[1])/pars[0] % 1.0 -1, rv_drive_new(pars, tmod,1,0,telvec,ttime)-medmodel,'k.')
 
     #plt.xlabel('Orbital Phase')
     plt.ylabel('Normalized RV (m/s)')
     #plt.plot((tmod - guess))
     plt.xlim([-0.25,1.25])
+    plt.ylim([-15,15])
+
+    #bin phased curve
+    phbin = np.arange(10)/10.
+    brv = np.zeros(10)
+    ebrv = np.zeros(10)
+    for i in range(10):
+        use = np.squeeze(np.where((phase >= phbin[i]) & (phase < phbin[i]+0.1)))
+        brv[i] = np.mean(rvnorm[use]-rvt[use])-medmodel
+        
+        ebrv[i] = np.std(rvnorm[use]-rvt[use])
+    
+    plt.errorbar(phbin+0.05,brv,yerr=ebrv,fmt='go',ms=8)
+    plt.errorbar(phbin-1+0.05,brv,yerr=ebrv,fmt='go',mfc='none',ms=8,mec='g')
+    plt.errorbar(phbin+1+0.05,brv,yerr=ebrv,fmt='go',mfc='none',ms=8,mec='g')
 
     ax2 = plt.subplot(gs[1])
     res2 = rvnorm - rvt - rv_drive_new(pars,jdb,1,0,telvec,ttime)
@@ -1705,24 +1735,88 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_50000',nmod=1000, nor
     plt.xlabel('Orbital Phase')
     plt.ylabel('Residuals (m/s)')
     plt.xlim([-0.25,1.25])
+
     
     
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_phase_afterplot.pdf')
     plt.savefig(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_phase_afterplot.png')
     plt.close(2)
 
-def write_soln_after(mpsini, a2sini, bic, targname='K00273',tag='K00273_circ_ecc_1_50000',norbits=1,npoly=0,telvec=-1,tt=np.zeros(1),tsig=-1,tfix=0,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel',ttime=0,mcdpl=-1,inc=-1):
+def write_soln_after(targname='K00273',tag='K00273_circ_ecc_1_50000',norbits=1,npoly=0,telvec=-1,mbic=-1,psrf=-1,a2arr_all=-1,home='/home/sgettel/',ttime=0,mcdpl=-1,inc=-1,inc_transit='no'):
+
+    msun = 1.9891e30
+    mearth = 5.97219e24
+    G = 6.673e-11 #m^3 kg^-1 s^-2
+    etoj = 317.83
+
+    #get transit params
+    if inc_transit == 'yes':
+        
+        #from literature
+        mstar = 1.0282
+        ems = 0.0399 #actually +0.0399,-0.0304
+        rs = 1.06568 #stellar radius
+        ers = 0.012
+        rs_dist = np.random.normal(loc=rs,scale=ers,size=10000) 
+
+            #read full transit posterior
+        sfile = open(home+'Dropbox/cfasgettel/research/kepler/'+targname+'/fit_posteriors_koi273_shortcad.dat')
+        p0_dist,tmod_dist,arstar_dist, rprs_dist, imp_dist= np.loadtxt(sfile,unpack=True,usecols=(0,1,2,3,4),skiprows=1)
+        sfile.close()
+
+            #made symmetric error bars
+        print ' '
+        pdiff = np.abs(p0_dist-np.median(p0_dist))
+        pdiff.sort()
+        print 'period: ',np.median(p0_dist),'+/-',str(np.percentile(pdiff,68))
+        
+        pdiff = np.abs(tmod_dist-np.median(tmod_dist))
+        pdiff.sort()
+        print 'tmod: ',np.median(tmod_dist),'+/-',str(np.percentile(pdiff,68))
+
+        pdiff = np.abs(arstar_dist-np.median(arstar_dist))
+        pdiff.sort()
+        print 'a/rstar: ',np.median(arstar_dist),'+/-',str(np.percentile(pdiff,68))
+        
+        pdiff = np.abs(rprs_dist-np.median(rprs_dist))
+        pdiff.sort()
+        print 'rp/rs: ',np.median(rprs_dist),'+/-',str(np.percentile(pdiff,68))
+        
+        pdiff = np.abs(imp_dist-np.median(imp_dist))
+        pdiff.sort()
+        print 'impact: ',np.median(imp_dist),'+/-',str(np.percentile(pdiff,68))
+            
+        #calculate transit params
+        rpl_dist = radius_estimate(rprs_dist,rs_dist)
+        rpl = np.percentile(rpl_dist,50)
+        
+        rpdiff = np.abs(rpl_dist-np.median(rpl_dist))
+        rpdiff.sort()
+        print 'radius: ',np.median(rpl),'+/-',str(np.percentile(rpdiff,68))
+        
+        inc = inclination_estimate(arstar_dist,imp_dist)
+        indiff = np.abs(inc-np.median(inc))
+        indiff.sort()
+
+        print 'inc: ',np.median(inc),'+/-',str(np.percentile(indiff,68))
+       
+        print ' '
+        #attempt to free some memory
+        del p0_dist, tmod_dist, arstar_dist, rprs_dist, imp_dist, pdiff
+            
 
     path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
     
     mcpars = np.load(path+'_mcpars.dat.npy')
     mcnames = np.load(path+'_mcnames.dat.npy')
-    mparr_mc = np.load(path+'_mass.dat.npy')
-    mcdpl = np.load(path+'_density.dat.npy')
+    #mparr_mc = np.load(path+'_mass.dat.npy')
+    #mcdpl = np.load(path+'_density.dat.npy')
     mcbest = np.percentile(mcpars,50, axis=0)
-    diff = np.abs(mcpars-mcbest,axis=0)
-    diff = np.sort(diff,axis=0)
+    #mpsini = np.percentile(mparr_mc,50, axis=0)
+    diff = np.abs(mcpars-mcbest)
+    diff = np.sort(diff)
     mcerr = np.percentile(diff,68,axis=0)
+
 
     poly_names = ['dvdt:  ','quad:  ', 'cubic: ','quart: ']
 
@@ -1730,15 +1824,15 @@ def write_soln_after(mpsini, a2sini, bic, targname='K00273',tag='K00273_circ_ecc
         tels = np.unique(telvec)
         ntel = np.unique(telvec).size
     
-    f = open(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_orbit_after.dat','w')
+    f = open(home+'Dropbox/cfasgettel/research/harpsn/mass_estimate/'+tag+'_orbit_after.dat','w')
     
     
     #print MCMC errs
     for i in range(norbits):
         eccs, oms = toeccom(mcpars[:,2+i*6],mcpars[:,3+i*6])
-        deccs = np.abs(np.percentile(eccs,50)-eccs,axis=0)
+        deccs = np.abs(np.percentile(eccs,50)-eccs)
         deccs = np.sort(deccs,axis=0)
-        doms = np.abs(np.percentile(doms,50)-doms,axis=0)
+        doms = np.abs(np.percentile(oms,50)-oms)
         doms = np.sort(doms,axis=0)
         
         f.write('                                               \n')
@@ -1748,72 +1842,83 @@ def write_soln_after(mpsini, a2sini, bic, targname='K00273',tag='K00273_circ_ecc
             f.write('Tt: '+ str(mcbest[1+i*6])+' +/-'+str(mcerr[1+i*6]) +'\n')
         else:
             f.write('Tp: '+ str(mcbest[1+i*6])+' +/-'+str(mcerr[1+i*6]) +'\n')
-            f.write('sqesinom: '+ str(mcbest[2+i*6])+' +/-'+str(mcherr[2+i*6])+'\n')
-            f.write('sqecosom: '+str(mcbest[3+i*6])+' +/-'+str(mcerr[3+i*6])+'\n')
-            f.write('ecc: '+str(np.percentile(eccs,50))+' +/-'+str(np.percentile(deccs,68))+'\n')
-            f.write('ecc1: '+ str(np.percentile(eccs,0))+'-'+str(np.percentile(eccs,68))+'\n')
-            f.write('om: '+str(np.percentile(oms,50))+' +/-'+str(np.percentile(doms,68))+'\n')
-            f.write('K1: '+str(mcbest[4+i*6])+' +/-'+str(mcerr[4+i*6])+'\n')
-            f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerri[5+i*6])+'\n')
+        f.write('sqesinom: '+ str(mcbest[2+i*6])+' +/-'+str(mcerr[2+i*6])+'\n')
+        f.write('sqecosom: '+str(mcbest[3+i*6])+' +/-'+str(mcerr[3+i*6])+'\n')
+        f.write('ecc: '+str(np.percentile(eccs,50))+' +/-'+str(np.percentile(deccs,68))+'\n')
+        f.write('ecc1: '+ str(np.percentile(eccs,0))+'-'+str(np.percentile(eccs,68))+'\n')
+        f.write('om: '+str(np.percentile(oms,50))+' +/-'+str(np.percentile(doms,68))+'\n')
+        f.write('K1: '+str(mcbest[4+i*6])+' +/-'+str(mcerr[4+i*6])+'\n')
+        f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerr[5+i*6])+'\n')
+
+
+        #recalculate mass & a2 
+        ms_dist = np.random.normal(loc=mstar,scale=ems,size=mcpars.shape[0])
+        fmarr = (1 - eccs**2)**(1.5)*mcpars[:,i*6+4]**3*(mcpars[:,i*6]*86400.0)/(2.0*np.pi*G)
+        mparr_mc = ((ms_dist*msun)**2*fmarr)**(1./3.)/mearth
+        a2arr_mc = 1.96e-2*ms_dist**(1./3.)*(mcpars[:,i*6])**(2./3.)
+    
+        mpbest = np.percentile(mparr_mc, 50)
+        dmp = np.abs(mpbest - mparr_mc)
+        dmp = np.sort(dmp,axis=0)
             
-            mpbest = np.percentile(mparr_mc[i,:], 50)
-            dmp = np.abs(mpbest - mparr_mc[i,:])
-            dmp = np.sort(dmp,axis=0)
-            #mphi = np.percentile(mparr_mc[i,:], 84)
-            #mplo = np.percentile(mparr_mc[i,:], 16)
-            a2best = np.percentile(a2arr_all[i,:], 50)
-            da2 = np.abs(a2best - a2arr_all[i,:])
-            da2 = np.sort(da2,axis=0)
-            #a2hi = np.percentile(a2arr_all[i,:], 84)
-            #a2lo = np.percentile(a2arr_all[i,:], 16)
 
-            f.write('nsamples: '+str(mparr_mc.shape[1])+'\n')
-            f.write('convergence: '+str(psrf)+'\n')
+        a2best = np.percentile(a2arr_mc, 50)
+        da2 = np.abs(a2best - a2arr_mc)
+        da2 = np.sort(da2,axis=0)
+           
 
-            f.write('mp*sin(i): '+str(mpbest)+' +/-'+str(np.percentile(dmp,68))+'\n')
-            f.write('mass error:'+ str(np.percentile(dmp,68)/mpbest*100)+ '%'+'\n') 
-            f.write('a2*sin(i): '+str(a2best)+' +/-'+str(np.percentile(da2,68))+'\n')
+        f.write('nsamples: '+str(mparr_mc.shape)+'\n')
+        f.write('convergence: '+str(psrf)+'\n')
 
-            if i == 0:
-                dpbest = np.percentile(mcdpl, 50)
-                ddp = np.abs(dpbest - mcdpl)
-                ddp = np.sort(ddp)
-                #dplo = np.percentile(mcdpl, 16)
-                #dphi = np.percentile(mcdpl, 84)
+        f.write('mp*sin(i): '+str(mpbest)+' +/-'+str(np.percentile(dmp,68))+'\n')
+        f.write('mass error:'+ str(np.percentile(dmp,68)/mpbest*100)+ '%'+'\n') 
+        f.write('a2*sin(i): '+str(a2best)+' +/-'+str(np.percentile(da2,68))+'\n')
+
+        if i == 0:
+            mcdpl = density_estimate(ut.arrayify(mpbest),rpl, mcmass=mparr_mc, rpl_dist=rpl_dist)
                 
-                f.write('density*sin(i): '+str(dpbest)+' +/-'+str(np.percentile(ddp,68))+'\n')
-
-           # if len(np.array(inc).shape) > 0:
-           #     #draw from inclination distribution
-           #     inc_dist = np.random.choice(inc,size=mparr_mc.shape[1])*np.pi/180.
-
-           #     mpbest_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 50)
-           #     mphi_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 84)
-           #     mplo_cor = np.percentile(mparr_mc[i,:]/np.sin(inc_dist), 16)
-           #     a2best_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 50)
-           #     a2hi_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 84)
-           #     a2lo_cor = np.percentile(a2arr_all[i,:]/np.sin(inc_dist), 16)
-
-           #     f.write('mp: '+str(mpbest_cor)+' +'+str(mphi_cor-mpbest_cor)+' -'+str(mpbest_cor-mplo_cor)+'\n')
-           #     f.write('mass error:'+ str((mphi_cor-mpbest_cor)/mpbest_cor*100)+','+str((mpbest_cor-mplo_cor)/mpbest_cor*100)+ '%'+'\n') 
-           #     f.write('a2: '+str(a2best_cor)+' +'+str(a2hi_cor-a2best_cor)+' -'+str(a2best_cor-a2lo_cor)+'\n')
-
-           #     if i == 0:
-           #         dpbest_cor = np.percentile(mcdpl/np.sin(inc_dist), 50)
-           #         dplo_cor = np.percentile(mcdpl/np.sin(inc_dist), 16)
-           #         dphi_cor = np.percentile(mcdpl/np.sin(inc_dist), 84)
+            dpbest = np.percentile(mcdpl, 50)
+            ddp = np.abs(dpbest - mcdpl)
+            ddp = np.sort(ddp)
+               
                 
-           #         f.write('density: '+str(dpbest_cor)+' +'+str(dphi_cor-dpbest_cor)+' -'+str(dpbest_cor-dplo_cor)+'\n')
+            f.write('density*sin(i): '+str(dpbest)+' +/-'+str(np.percentile(ddp,68))+'\n')
 
-        for i in range(npoly):
-            #f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerr[5+i*6])+'\n')
-            f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
-        for i in range(ntel-1):
-            a = np.squeeze(np.where(telvec == tels[i+1]))
-            f.write('offset: '+str(mcbest[i+norbits*6+npoly])+' +'+str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly])+' -'+str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])+'\n')
+            if len(np.array(inc).shape) > 0:
+                #draw from inclination distribution
+                inc_dist = np.random.choice(inc,size=mparr_mc.shape)*np.pi/180.
 
-        for i in range(ntel):
-            f.write('jitter: '+ str(mcbest[-ntel+i])+' +'+str(mchi[-ntel+i]-mcbest[-ntel+i])+' -'+str(mcbest[-ntel+i]-mclo[-ntel+i])+'\n')
+                mpbest_cor = np.percentile(mparr_mc/np.sin(inc_dist), 50)
+                dmpc = np.abs(mpbest_cor - mparr_mc/np.sin(inc_dist))
+                dmpc.sort()
+                
+                a2best_cor = np.percentile(a2arr_mc/np.sin(inc_dist), 50)
+                dac = np.abs(a2best_cor - a2arr_mc/np.sin(inc_dist))
+                dac.sort()
+
+               
+
+                f.write('mp: '+str(mpbest_cor)+'+/-'+str(np.percentile(dmpc,68))+'\n')
+                #f.write('mass error:'+ str((mphi_cor-mpbest_cor)/mpbest_cor*100)+','+str((mpbest_cor-mplo_cor)/mpbest_cor*100)+ '%'+'\n') 
+                f.write('a2: '+str(a2best_cor)+'+/-'+str(np.percentile(dac,68))+'\n')
+
+                if i == 0:
+                    dpbest_cor = np.percentile(mcdpl/np.sin(inc_dist), 50)
+                    dpc = np.abs(dpbest_cor - mcdpl/np.sin(inc_dist))
+                    dpc.sort()
+                    
+                
+                    f.write('density: '+str(dpbest_cor)+'+/-'+str(np.percentile(dpc,68))+'\n')
+
+#        for i in range(npoly):
+#            #f.write('gamma: '+ str(mcbest[5+i*6])+' +/-'+str(mcerr[5+i*6])+'\n')
+#            f.write(str(poly_names[i])+ str(mcbest[i+norbits*6])+' +'+str(mchi[i+norbits*6]-mcbest[i+norbits*6])+' -'+str(mcbest[i+norbits*6]-mclo[i+norbits*6]) +'\n')
+#        for i in range(ntel-1):
+#            a = np.squeeze(np.where(telvec == tels[i+1]))
+#            f.write('offset: '+str(mcbest[i+norbits*6+npoly])+' +'+str(mchi[i+norbits*6+npoly]-mcbest[i+norbits*6+npoly])+' -'+str(mcbest[i+norbits*6+npoly]-mclo[i+norbits*6+npoly])+'\n')
+
+#        for i in range(ntel):
+#            f.write('jitter: '+ str(mcbest[-ntel+i])+' +'+str(mchi[-ntel+i]-mcbest[-ntel+i])+' -'+str(mcbest[-ntel+i]-mclo[-ntel+i])+'\n')
 
         f.write('MC BIC: '+str(mbic)+'\n')
     f.close()
