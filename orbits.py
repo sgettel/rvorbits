@@ -13,13 +13,17 @@ import socket
 import triangle
 import numpy as np
 import read_rdb_harpsn as rr
+import matplotlib
+matplotlib.rcParams.update({'figure.autolayout': True})
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as grd
 import utils as ut
 from pwkit import lsqmdl, msmt
 from scipy.stats import norm
 
-def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, webdat='no', nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',tfix=0,hd=0,machine='vonnegut0',thin=1,threads=1):
+def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxrv=1e6,minrv=-1e6,maxsrv=5, 
+	nwalkers=200, pfix=1,norbits=1,npoly=0,keck='no',outer_loop='no',nsteps=1000,nburn=500,fixjit='no',storeflat='yes',
+	tfix=0,hd=0,machine='vonnegut0',thin=1,threads=1): #webdat = 'no'
 
     tag = ''
     if npoly > 4:
@@ -69,7 +73,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 
 
         print 'Target: ',targname
-        jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk, exptime = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv,webdat=webdat)
+        jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk, exptime = rr.process_all(targname,maxsrv=maxsrv,maxrv=maxrv,minrv=minrv)
         jdb += 2.4e6 #because process_all gives truncated JDBs
         telvec = np.zeros_like(jdb)
         print jdb.size,' HARPS-N obs'
@@ -113,7 +117,6 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
 #        print 'Adding ',str(jitter),' m/s fixed jitter'
 #    else:
     nsrv = srv
-
 
 
     #process offsets  
@@ -166,9 +169,10 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
     if targname == 'K00273':
 
         #from literature
-        mstar = 1.069
-        rs = 1.081 #stellar radius
-        ers = 0.019
+        mstar = 1.0282
+        ems = 0.0399
+        rs = 1.06568 #stellar radius
+        ers = 0.012
         rs_dist = np.random.normal(loc=rs,scale=ers,size=10000) 
 
         #get transit params
@@ -183,6 +187,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             p0_err = (np.percentile(p0_dist,84)-np.percentile(p0_dist,16))/2.
             t0_err = (np.percentile(tmod_dist,84)-np.percentile(tmod_dist,16))/2.
             print ' '
+            print 'From transit posteriors:'
             print 'period: ',p0,' +',str(np.percentile(p0_dist,84)-p0),' -',str(p0-np.percentile(p0_dist,16))
             print 't0: ',t0,' +',str(np.percentile(tmod_dist,84)-np.percentile(tmod_dist,50)),' -',str(np.percentile(tmod_dist,50)-np.percentile(tmod_dist,16))
             print 'a/rstar: ',np.percentile(arstar_dist,50),' +',str(np.percentile(arstar_dist,84)-np.percentile(arstar_dist,50)),' -',str(np.percentile(arstar_dist,50)-np.percentile(arstar_dist,16))
@@ -215,10 +220,18 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         del p0_dist, tmod_dist, arstar_dist, rprs_dist, imp_dist
 
         guesspars = np.array([p0, t0, 0.0, 90.0, 2.2, -16.0,  500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0,0.0])
-        ttime = np.array([1,0])
-
         psig = np.array([p0_err,0.0])
         tsig = np.array([t0_err,0.0])
+        ttime = np.array([1,0])
+
+        if norbits == 1:
+        	guesspars = np.array([500.0, 2455041.9, 0.23, 340.0, 137.0,0.0,0.0,0.0])
+        	psig = np.zeros(1)
+        	tsig = np.zeros(1)
+        	ttime = np.zeros(1)
+        
+
+        
         porig = guesspars[0+ip*6]
         torig = guesspars[1+ip*6] - epoch
         
@@ -259,7 +272,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
         print 'BIC:          ',str(bic0)
 
         #mass estimate*sin(i)
-        mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits)
+        mpsini, a2sini = mass_estimate(m, mstar, norbits=norbits,ems=ems)
         print 'mp*sin(i):         ',str(mpsini)
         #print 'mp:      ',str(mp)
 
@@ -316,7 +329,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
                 
             mcbest = par1
             
-            mpsini, a2sini, mparr_mc, a2arr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars)
+            mpsini, a2sini, mparr_mc, a2arr_mc = mass_estimate(m, mstar, norbits=norbits, mcpar=mcpars,ems=ems)
             dpl = density_estimate(mpsini,rpl, mcmass=mparr_mc, rpl_dist=rpl_dist)
             
             #plot_hists(mcpars,mparr_mc,mcnames,flt,norbits=norbits)
@@ -353,6 +366,7 @@ def orbits_test(targname='K00273',jitter=0.5,epoch=2.4568478981528e6,circ=0,maxr
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_flt.dat',flt)
             np.save('/pool/'+machine+'/harpsn/mass_estimate/'+targname+tag+'_bestpars.dat',bestpars)
         else:
+            np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_chain.dat',chain)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mass.dat',mparr_mc)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_density.dat',dpl)
             np.save(home+'/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+targname+tag+'_mcpars.dat',mcpars)
@@ -772,7 +786,8 @@ def density_estimate(mpsini,rpl,mcmass=-1,rpl_dist=-1):
     if len(np.array(mcmass).shape) > 0:
 
         #sample radius distribution to match size of mass distribution
-        rpl = np.random.choice(rpl_dist,size=mcmass.size)
+        print mcmass.shape, mcmass.size
+        rpl = np.random.choice(rpl_dist,size=mcmass.shape)
         vol = 4./3.*np.pi*(rpl/re2cm)**3 #cm**3
         mcdpl = mcmass*5.973e27/vol
         
@@ -1524,63 +1539,131 @@ def make_triangle_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/'):
     fig.savefig(path+basename+'_triangle.pdf')
     plt.close(fig)
 
-def plot_hists_after(basename,path='/pool/vonnegut0/harpsn/mass_estimate/',norbits=1):
-#mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
 
-    mcpars = np.load(path+basename+'_mcpars.dat.npy')
-    mcnames = np.load(path+basename+'_mcnames.dat.npy')
-    flt = np.load(path+basename+'_flt.dat.npy')
-    bestpars = np.load(path+basename+'_bestpars.dat.npy')
-    mass = np.load(path+basename+'_mass.dat.npy')
+def plot_hists_after(basename,path='/Users/Sara/research_nondropbox/harpsn/mass_estimate_chains/',plpars=[1,1,0,0,1],epoch=2.4568478981528e6):
 
-    f = np.squeeze(flt.nonzero())
+	plpars = ut.arrayify(plpars) #mcpars.shape = [nwalkers*(nsteps-nburn),n_mcin]
+	mcpars = np.load(path+basename+'_mcpars.dat.npy')
+	mcnames = np.load(path+basename+'_mcnames.dat.npy')
+	flt = np.load(path+basename+'_flt.dat.npy')
+	bestpars = np.load(path+basename+'_bestpars.dat.npy')
+	mass = np.load(path+basename+'_mass.dat.npy')
+	print mass.shape
+	f = np.squeeze(plpars.nonzero())
 
-    plt.figure(figsize=(18,15))
+	if 2 or 3 in f:
+		ecc,om = toeccom(mcpars[:,2],mcpars[:,3])
+
+	plt.figure(figsize=(18,15))
     
-    nplots = len(f)+norbits+1
-    print 'nplots ',nplots
+	nplots = len(f)
+	print 'nplots ',nplots
 
    #auto-generate plot layout
-    nrow = np.floor(np.sqrt(nplots)).astype(int)
-    if nplots % nrow == 0:
-        ncol = nrow
-    else:
-        ncol = nrow + 1 
-    
-    for i in range(f.size):
-        #print mcnames[f[i]]
-        ax = plt.subplot(nrow,ncol, i+1)
-              
-        t = ax.yaxis.get_offset_text()
+#	nrow = np.floor(np.sqrt(nplots)).astype(int)
+#	if nplots % nrow == 0:
+#		ncol = nrow
+#	else:
+#		ncol = nrow + 1 
+ 
+	ncol = 2
+	nrow = np.ceil(np.float(nplots)/ncol).astype(int)
+
+	print nrow, ncol
+	for i in range(f.size):
+		print mcnames[f[i]]
+		ax = plt.subplot(nrow,ncol, i+1)
+		ax.tick_params(axis='both',labelsize=14)
+        
+		t = ax.yaxis.get_offset_text()
         #t.set_size(40) #NOPE
-        n, bins, patches = plt.hist(mcpars[:,f[i]],100)
-        plt.axvline(np.median(mcpars[:,f[i]]),linewidth=2)
-        plt.axvline(np.percentile(mcpars[:,f[i]],84),linewidth=2)
-        plt.axvline(np.percentile(mcpars[:,f[i]],16),linewidth=2)
-        ax.set_xlabel(mcnames[f[i]])
-        plt.tight_layout()
-        junk = ax.get_xticklabels() #why is this formatted like this?
+		if f[i] == 2:
+			n, bins, patches = plt.hist(ecc,100)
+			pmed = np.median(ecc)
+			pdiff = np.abs(ecc- pmed)
+		elif f[i] == 3:
+			n, bins, patches = plt.hist(om*180./np.pi,100)
+			pmed = np.median(om*180./np.pi)
+			pdiff = np.abs(om*180./np.pi- pmed)
+		elif f[i] == 0 or f[i] == 1:
+			pmed = np.median(mcpars[:,f[i]])
+			n, bins, patches = plt.hist(mcpars[:,f[i]]-pmed,100)
+			
+			pdiff = np.abs(mcpars[:,f[i]] - pmed)
+		else:
+			n, bins, patches = plt.hist(mcpars[:,f[i]],100)
+			pmed = np.median(mcpars[:,f[i]])
+			pdiff = np.abs(mcpars[:,f[i]] - pmed)
+
+		if f[i] == 0:
+			plt.axvline(0,linewidth=2,color='black')
+			plt.axvline(0+np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(0-np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(0+np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+			plt.axvline(0-np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+			ax.set_xlabel(mcnames[f[i]]+' - '+str(pmed),fontsize=16)
+		elif f[i] == 1:
+			plt.axvline(0,linewidth=2,color='black')
+			plt.axvline(0+np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(0-np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(0+np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+			plt.axvline(0-np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+			ax.set_xlabel(mcnames[f[i]]+' - '+str(pmed+epoch),fontsize=16)
+		else:
+			plt.axvline(pmed,linewidth=2,color='black')
+			plt.axvline(pmed+np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(pmed-np.percentile(pdiff,68.3),linestyle='--',color='red',linewidth=2)
+			plt.axvline(pmed+np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+			plt.axvline(pmed-np.percentile(pdiff,95.4),linestyle='--',color='green',linewidth=2)
+		if f[i] == 0:
+			ax.set_xlabel(mcnames[f[i]]+' - '+str(pmed),fontsize=16)
+		elif f[i] == 1:
+			ax.set_xlabel(mcnames[f[i]]+' - '+str(pmed+epoch),fontsize=16)
+		elif f[i] == 2:
+			ax.set_xlabel('Eccentricity',fontsize=16)
+			ax.set_xlim([0,1])
+		elif f[i] == 3:
+			ax.set_xlabel('Omega',fontsize=16)
+		else:
+			ax.set_xlabel(mcnames[f[i]],fontsize=16)
         
-        label = [junk[q].get_position()[0] for q in range(len(junk)) ]
+		#junk = ax.get_xticklabels() #why is this formatted like this?
         
-        ax.set_xticklabels(label,rotation=-45)
+		#label = [junk[q].get_position()[0] for q in range(len(junk)) ]
+        
+        #ax.set_xticklabels(label,rotation=-45)
     
 #    for i in norbits:
 #        ax = plt.subplot(nrow,ncol, f.size+i+1)
 #        n, bins, patches = plt.hist(mcpars[:,f[i]],100)
+    #plt.tight_layout()
+
+    #mass goes last
+	ax = plt.subplot(nrow,ncol, i+2)
+	t = ax.yaxis.get_offset_text()
+	mmed = np.median(mass[0,:])
+	mdiff = np.abs(mass[0,:] - mmed)
+	n, bins, patches = plt.hist(mass[0,:],100)
+
+	plt.axvline(mmed,linewidth=2,color='black')
+	plt.axvline(mmed+np.percentile(mdiff,68.3),linestyle='--',color='red',linewidth=2)
+	plt.axvline(mmed-np.percentile(mdiff,68.3),linestyle='--',color='red',linewidth=2)
+	plt.axvline(mmed+np.percentile(mdiff,95.4),linestyle='--',color='green',linewidth=2)
+	plt.axvline(mmed-np.percentile(mdiff,95.4),linestyle='--',color='green',linewidth=2)
+	
+	ax.set_xlabel('Mp',fontsize=16)
+	plt.savefig('/Users/Sara/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.png')
+	plt.savefig('/Users/Sara/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.pdf')
     
-    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.png')
-    plt.savefig('/home/sgettel/Dropbox/cfasgettel/research/harpsn/mass_estimate/'+basename+'_hist.pdf')
+	plt.close()
     
-    plt.close()
-    
-    return junk
+	
 
 def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_300000',nmod=1000, norbits=2,npoly=1,keck='yes',epoch=2.4568478981528e6,home='/home/sgettel/',ttime = np.array([1,0]),jitter=[1.5,3.5]):
 
     jitter = ut.arrayify(jitter)
-    path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
-    #path = '/pool/vonnegut0/harpsn/mass_estimate/K00273_ecc_ecc_1_80002'
+    #path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
+    path = home+'research_nondropbox/harpsn/mass_estimate_chains/'+tag
 
     jdb, rv, srv, labels, fwhm, contrast, bis_span, rhk, sig_rhk, exptime = rr.process_all(targname,maxrv=-50000,maxsrv=5)
     jdb += 2.4e6 #because process_all gives truncated JDBs
@@ -1597,6 +1680,7 @@ def plot_rv_after(targname='K00273',tag='K00273_circ_ecc_1_300000',nmod=1000, no
             
             
         krvnorm = krv - np.median(krv)
+        print 'median Keck RV', np.median(krv)
         ktel = np.ones_like(kjdb)
             
         jdb = np.append(jdb,kjdb)
@@ -1805,7 +1889,8 @@ def write_soln_after(targname='K00273',tag='K00273_circ_ecc_1_50000',norbits=1,n
         del p0_dist, tmod_dist, arstar_dist, rprs_dist, imp_dist, pdiff
             
 
-    path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
+    #path = '/pool/vonnegut0/harpsn/mass_estimate/'+tag
+    path = '/Users/Sara/research_nondropbox/harpsn/mass_estimate_chains/'+tag
     
     mcpars = np.load(path+'_mcpars.dat.npy')
     mcnames = np.load(path+'_mcnames.dat.npy')
